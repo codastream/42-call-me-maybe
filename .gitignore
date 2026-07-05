@@ -1,6 +1,7 @@
 downloads/
 llm_sdk/
 data/
+.env
 
 # Visual Studio Code
 tempCodeRunnerFile.py

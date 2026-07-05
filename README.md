@@ -52,6 +52,11 @@ make lint
 |[Qwen 0.6B on HF](https://huggingface.co/Qwen/Qwen3-0.6B)|      |                   |
 |[Qwen 0.6B on APXML](https://apxml.com/models/qwen3-0-6b)|      |                   |
 
+## Useful functions
+
+- `np.argmax` : find index of maximum value - used to select best candidate token
+- `np.full_like` : generate a NumPy array with same shape and type as the one provided
+
 ## AI Usage
 
 - Pedagogical prompt (give no code, introduce and define new concepts progressively) with Gemini to help learn how to setup a python project with new tools (uv)
@@ -80,8 +85,9 @@ DSPy : optimizes prompts and examples to get closer to expected output
 |gQA - Grouped query attention||      |
 |SwiGLU activation||      |
 |RoPE - Rotary Positional Embeddings||      |
+|ChatML|markup language used by some models (OpenAI, Alibaba) to structure a conversation and distinguish roles|`<|im_start|>` indicates a new message and followed by sender role (`system`, `user`, `assistant`)|
 |||      |
-
+|||      |
 
 # Algorithm explanation
 
@@ -128,7 +134,7 @@ Trie : optimal data structure to identify valid token ids
 
 # Challenges faced
 
-- cleaning tokenizer special chars
+- cleaning tokenizer special chars : BPE tokenizers include special characters. For instance : `Ġ` to indicate a space. Substring encoding depends of its position. They should be cleaned before checking matches. 
 - detecting state change
 - dynamic constraints
 - decoding performance
@@ -143,3 +149,6 @@ Trie : optimal data structure to identify valid token ids
 - nominal cases
 - syntaxic resilience (special characters, ambiguous prompts)
 - check against expecting result
+
+# Example usage
+

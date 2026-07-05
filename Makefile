@@ -7,7 +7,7 @@ run:
 	uv run python -m src
 
 debug:
-	uv run python -m pdb src
+	uv run python -m pdb -m src
 
 clean:
 	rm -rf __pycache__ .mypy_cache
