@@ -1,7 +1,8 @@
 from src.matcher.MatcherState import MatcherState
 from enum import Enum, auto
-from src.models.FunctionDefinition import FunctionDefinition
+from src.models.FunctionDefinition import FunctionDefinition, TypeDef
 from src.utils.convert import convert_token_str_to_bytes
+import logging
 
 class MatchType(Enum):
   NO_MATCH = auto()
@@ -23,9 +24,10 @@ class JSONSchemaMatcher:
     self.evaluated_parameters = set()
     self.current_param_key = None
 
-  def _check_match_type(self, buf: str, target: str | None = None, allowed_targets: list[str] | None = None) -> MatchType:
+  def _check_match_type(self, buf: bytes, target: bytes | None = None, allowed_targets: list[bytes] | None = None) -> MatchType:
     """Determine how current buffer correspond to target bytes"""
     
+    log = logging.getLogger("matcher_logger")
     if allowed_targets is not None:
       matched = [n for n in allowed_targets if n.startswith(buf)]
       if not matched:
@@ -76,6 +78,7 @@ class JSONSchemaMatcher:
   def _evaluate_char(self, char:bytes) -> bool:
     """Evaluate a character according to state"""
 
+    log = logging.getLogger("matcher_logger")
     self.current_buffer += char
     buf = self.current_buffer
 
@@ -97,7 +100,6 @@ class JSONSchemaMatcher:
         self.current_buffer = b""
         return True
       return match == MatchType.PARTIAL_MATCH
-      # return self._try_transition(match, MatcherState.DONE_FUN_NAME)
     
     elif self.state == MatcherState.DONE_FUN_NAME:
       target = JSONSchemaMatcher.PARAM_PREFIX
@@ -107,20 +109,26 @@ class JSONSchemaMatcher:
     elif self.state == MatcherState.EXPECT_PARAM_KEY:
       if not self.selected_function or not self.selected_function.parameters:
         return False
+
       all_keys = self.selected_function.parameters.keys()
       allowed_targets = [f'"{k}": '.encode('utf-8') for k in all_keys if k not in self.evaluated_parameters]
       match = self._check_match_type(buf, allowed_targets=allowed_targets)
       if match == MatchType.COMPLETE_MATCH:
         buf_str = buf.decode('utf-8', errors='surrogateescape')
         self.current_param_key = buf_str.replace('"', '').replace(':', '').strip()
-      return self._try_transition(match, MatcherState.EXPECT_PARAM_VAL)
+        self.state = MatcherState.EXPECT_PARAM_VAL
+        self.current_buffer = b""
+        return True
+      return match == MatchType.PARTIAL_MATCH
     
     elif self.state == MatcherState.EXPECT_PARAM_VAL:
       if not self.selected_function or not self.current_param_key or not self.selected_function.parameters:
         return False
+      if buf == b" " or buf == b"":
+        return True
       param_field = self.selected_function.parameters[self.current_param_key]
       param_type = param_field.type
-      buf_str = buf.decode('utf-8', errors='surrogateescape')
+      buf_str = buf.decode('utf-8', errors='surrogateescape').lstrip()
       char_str = char.decode('utf-8', errors='surrogateescape')
       
       all_keys = list(self.selected_function.parameters.keys())
@@ -131,10 +139,21 @@ class JSONSchemaMatcher:
         return False
       
       is_valid = param_type._validate_buffer_type(buf_str, char_str)
-      if is_valid and char_str in (",", "}"):
-        self.evaluated_parameters.add(self.current_param_key)
-        self.state = MatcherState.EXPECT_COMMA_OR_END
-        self.current_buffer = char
+      if is_valid:
+        if char_str in (",", "}"):
+          self.evaluated_parameters.add(self.current_param_key)
+          self.state = MatcherState.EXPECT_COMMA_OR_END
+          self.current_buffer = char
+          return True
+        
+        if param_type == TypeDef.STRING:
+          clean_val = buf_str.strip()
+          if clean_val.startswith('"') and clean_val.endswith('"') and len(clean_val) > 1:
+            if len(clean_val) == 2 or clean_val[-2] != '\\':
+              self.evaluated_parameters.add(self.current_param_key)
+            self.state = MatcherState.EXPECT_COMMA_OR_END
+            self.current_buffer = b""
+
       return is_valid
     
     elif self.state == MatcherState.EXPECT_COMMA_OR_END:

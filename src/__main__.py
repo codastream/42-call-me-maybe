@@ -120,11 +120,12 @@ for test in tests[0:1]:
     if not authorized_tokens:
       log.error(f"Error: decoding blocked : no valid vocabulary for state {matcher.state}")
       break
-    debug_decoded_candidates(matcher.state, authorized_tokens, model)
 
     mask = np.full_like(logits, -float('inf'))
     mask[authorized_tokens] = 0
     filtered_logits = logits + mask
+
+    debug_decoded_candidates(matcher.state, authorized_tokens, logits, filtered_logits, model)
 
     next_token = int(np.argmax(filtered_logits))
     input_ids.append(next_token)
