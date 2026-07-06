@@ -51,6 +51,7 @@ make lint
 |[Pydantic doc](https://pydantic.dev/docs/validation/latest/concepts/models/)|📔 doc|Models used to validate input|
 |[Qwen 0.6B on HF](https://huggingface.co/Qwen/Qwen3-0.6B)|      |                   |
 |[Qwen 0.6B on APXML](https://apxml.com/models/qwen3-0-6b)|      |                   |
+|[BPE Wikipedia](https://en.wikipedia.org/wiki/Byte-pair_encoding)|📙 wikipedia article|                   |
 
 ## Useful functions
 
@@ -88,6 +89,27 @@ DSPy : optimizes prompts and examples to get closer to expected output
 |ChatML|markup language used by some models (OpenAI, Alibaba) to structure a conversation and distinguish roles|`<|im_start|>` indicates a new message and followed by sender role (`system`, `user`, `assistant`)|
 |||      |
 |||      |
+
+## Byte-pair encoding
+
+Encode _most frequent pairs of adjacent tokens_ into a new token, until the _vocabulary_ reaches a certain size.
+
+Qwen uses _byte-level BPE_
+
+Example tokenization from `"Hello world 😄 !"`
+
+- Text to bytes
+Each character becomes a byte (or series of bytes):
+😄 -> `\xf0\x9f\x98\x84`
+
+- Visual mask
+When decoding bytes into UTF-8, it could generate spaces and non printable characters. This could break terminal display or file integrity. Therefore, we have to ensure that every possible byte value (0 to 255) is interpretable as a printable character (cf. function `bytes_to_unicode` in the project).
+`b' '` -> `Ġ`
+
+- Grouping
+Pairs are merged (most frequent are merged first), till the vocabulary reaches its max size (151 643 tokens for Qwen-2)
+`Hello` -> ID
+
 
 # Algorithm explanation
 

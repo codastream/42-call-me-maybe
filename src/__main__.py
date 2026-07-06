@@ -1,33 +1,28 @@
 
 import argparse
 import json
-import logging
-import os
-from rich import print as rprint
-from rich.logging import RichHandler
+import sys
+
 import numpy as np
-from pydantic import TypeAdapter, ValidationError
-from src.JSONSchemaMatcher import JSONSchemaMatcher
-from src.MatcherState import MatcherState
-from src.checkers import check_file_permissions, has_correct_extension
+from pydantic import TypeAdapter
+from dotenv import load_dotenv, dotenv_values
+from llm_sdk import Small_LLM_Model
+
+from src.utils.convert import extract_and_cache_vocabulary
+from src.utils.debug import debug_decoded_candidates, debug_title, debug_prompt
+from src.config import get_logger
+from src.checkers import check_args_paths, check_format
+from src.matcher.JSONSchemaMatcher import JSONSchemaMatcher
+from src.matcher.MatcherState import MatcherState
 from src.models.FunctionDefinition import FunctionDefinition 
 from src.models.Test import TestDefinition
-from llm_sdk import Small_LLM_Model
-from dotenv import load_dotenv, dotenv_values
 
 #=================
-# LOG CONFIG
+# CONFIG
 #=================
 
 load_dotenv()
-
-FORMAT = "%(message)s"
-logging.basicConfig(
-    level="DEBUG", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
-)
-
-log = logging.getLogger("rich")
-logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+log = get_logger()
 
 #=================
 # FILE VALIDATION
@@ -40,92 +35,46 @@ parser.add_argument('-o', '--output', type=str, help='output file', default='dat
 
 args = parser.parse_args()
 
-# check definitions
-defs_path = args.functions_definition.strip()
-is_def_valid = check_file_permissions(defs_path, "r") and has_correct_extension(defs_path, ".json")
-if not is_def_valid:
-  exit()
-
-# check input file
-input_path = args.input.strip()
-is_in_valid = check_file_permissions(input_path, "r") and has_correct_extension(input_path, ".json")
-if not is_in_valid:
-  exit()
-
-# check output file
-output_path = args.output.strip()
-is_out_valid = check_file_permissions(output_path, "w")
-if not is_out_valid:
-  exit()
+try:
+  defs_path, input_path, output_path = check_args_paths(args)
+except ValueError as e:
+  log.error(f"Error: {e}")
+  sys.exit(1)
 
 #=================
-# MODEL VALIDATION
+# SCHEMA VALIDATION
 #=================
 
 functions_list_adapter = TypeAdapter(list[FunctionDefinition])
-test_adapter = TypeAdapter(list[TestDefinition])
+tests_list_adapter = TypeAdapter(list[TestDefinition])
 fun_defs = None
 tests = None
 
 try:
-  with open(defs_path, "r") as file:
-    raw = json.load(file)
-    fun_defs = functions_list_adapter.validate_python(raw)
-    log.info(f"functions definitions are valid")
-except json.JSONDecodeError:
-  log.error(f"Error: {defs_path} does not have a valid JSON structure.")
-  exit(1)
-except ValidationError as e:
-  log.error(f"Error: {defs_path} does not match function definition schema.")
-  exit(1)
-except Exception as e:
-  log.error(f"Unexpected error while reading {defs_path} : {e}")
-  exit(1)
+  fun_defs = check_format(defs_path, functions_list_adapter)
+  log.info(f"functions definitions are valid")
+  tests = check_format(input_path, tests_list_adapter)
+  log.info(f"tests definitions are valid")
+except ValueError as e:
+  log.error(f"Error: {e}")
+  sys.exit(1)
 
-try:
-  with open(input_path, "r") as file:
-    raw = json.load(file)
-    tests = test_adapter.validate_python(raw)
-    log.info(f"tests definitions are valid")
-except json.JSONDecodeError:
-  log.error(f"Error: {input_path} does not have a valid JSON structure.")
-  exit(1)
-except ValidationError as e:
-  log.error(f"Error: {input_path} does not match test input schema.")
-  exit(1)
-except Exception as e:
-  log.error(f"Unexpected error while reading {input_path} : {e}")
-  exit(1)
-
-#======================
-# EXTRACT VOCABULARY
-#======================
+#===================================
+# MODEL INIT AND VOCABULARY MAPPING
+#===================================
 
 model = Small_LLM_Model(local_files_only=True)
 vocab_file_path = model.get_path_to_vocab_file()
-try: 
-  with open(vocab_file_path, "r", encoding="utf-8") as vocab_file:
-    raw_vocab = json.load(vocab_file)
-  vocab_map: dict[int, str] = {int(token_id): token_str for token_str, token_id in raw_vocab.items()}
-  logging.info("Vocab loaded")
-except json.JSONDecodeError:
-  log.error("Error: could not decode model vocabulary file")
-except Exception as e:
-  log.error(f"Unexpected error while extracting vocabulary: {e}")
 
-#======================
-# UTILS
-#======================
+VOCAB_RAW_BYTES: dict[int, bytes] = {}
+VOCAB_PRINT: dict[int, str] = {}
 
-def debug_decoded_candidates(context: str, candidates_tokens: list[int], model: Small_LLM_Model) -> None:
-  if os.getenv("DEBUG") == "True":
-    decoded_candidates = [model.decode([tok]) for tok in candidates_tokens]
-    rprint(f"authorized tokens ids for {context}: {candidates_tokens}")
-    rprint(f"decoded tokens for {context}[bold cyan]:", decoded_candidates)
-
-def print_step(name:str) -> None:
-  if os.getenv("DEBUG") == "True":
-    rprint(f"\n[bold yellow on black] === { name.upper() } === [/bold yellow on black]\n")
+try:
+  VOCAB_RAW_BYTES, VOCAB_PRINT = extract_and_cache_vocabulary(vocab_file_path)
+  log.info(f"Loaded {len(VOCAB_RAW_BYTES)} optimized tokens into cache maps.")
+except (ValueError, Exception) as e:
+  log.error(f"Error: {e}")
+  sys.exit(1)
 
 #======================
 # GENERATE RESULTS
@@ -146,7 +95,7 @@ for test in tests[0:1]:
     f"<|im_start|>assistant\n"
   )
 
-  logging.info(f"Current prompt = {current_prompt}")
+  log.info(f"Current prompt = {current_prompt}")
 
   forced_prefix = f'{{"prompt": "{current_prompt}", "name": "'
   generated = chat_prompt + forced_prefix
@@ -156,14 +105,14 @@ for test in tests[0:1]:
   matcher.state = MatcherState.EXPECT_FUN_NAME
   matcher.current_buffer = b""
  
-  print_step("function name..")
+  debug_title("function name..")
 
   while matcher.state != MatcherState.FINISH:
     
     logits = np.array(model.get_logits_from_input_ids(input_ids))
     authorized_tokens = []
 
-    for token_id, token_str in vocab_map.items():
+    for token_id, token_str in VOCAB_PRINT.items():
       if token_str is None:
         continue
       if matcher.evaluate_token(token_str):
@@ -183,7 +132,7 @@ for test in tests[0:1]:
     matcher.consume_token(token_str)
     generated += token_str
 
-    rprint(f"Generated: [bold green]{generated}[/bold green]")
+    debug_prompt(generated)
 
   json_start_idx = generated.find(f'{{"prompt":')
   if json_start_idx != -1:

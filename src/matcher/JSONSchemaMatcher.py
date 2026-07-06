@@ -1,35 +1,12 @@
-from src.MatcherState import MatcherState
+from src.matcher.MatcherState import MatcherState
 from enum import Enum, auto
 from src.models.FunctionDefinition import FunctionDefinition
-from rich import print as rprint
+from src.utils.convert import convert_token_str_to_bytes
 
 class MatchType(Enum):
   NO_MATCH = auto()
   PARTIAL_MATCH = auto()
   COMPLETE_MATCH = auto()
-
-def bytes_to_unicode() -> dict[int, str]:
-  """Table associating byte with visible unicode character"""
-
-  bs =  list(range(ord("!"), ord("~") + 1)) + \
-        list(range(ord("¡"), ord("¬") + 1)) + \
-        list(range(ord("®"), ord("ÿ") + 1))
-  cs = bs[:]
-  n = 0
-  for b in range(256):
-    if b not in bs:
-      bs.append(b)
-      cs.append(256 + n)
-      n += 1
-  cs_chars = [chr(c) for c in cs]
-  return dict(zip(bs, cs_chars))
-
-BYTE_ENCODER = bytes_to_unicode()
-BYTE_DECODER = {v: k for k,v in BYTE_ENCODER.items()}
-
-def token_to_real_bytes(token_str: str) -> bytes:
-  """Convert a vocab token to real bytes"""
-  return bytes(BYTE_DECODER[c] for c in token_str)
 
 class JSONSchemaMatcher:
   PROMPT_PREFIX: bytes = b'{"prompt": "'
@@ -79,7 +56,7 @@ class JSONSchemaMatcher:
   def evaluate_token(self, token_str: str) -> bool:
     """Simulate token insertion and return True if valid"""
 
-    token_bytes = token_to_real_bytes(token_str)
+    token_bytes = convert_token_str_to_bytes(token_str)
     saved_state = (self.state, self.current_buffer, self.selected_function, self.current_param_key, set(self.evaluated_parameters))
     is_valid = True
     for byte_int in token_bytes:
