@@ -82,7 +82,7 @@ except (ValueError, Exception) as e:
 outputs = []
 available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
-for test in tests[0:1]:
+for test in tests[8:9]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
@@ -94,7 +94,7 @@ for test in tests[0:1]:
             current_prompt=test.prompt,
             available_fun=available_fun,
             matcher=matcher,
-            timeout=30
+            timeout=180
           )
         log.debug(f"json obj = {json_obj}")
         outputs.append(json_obj)

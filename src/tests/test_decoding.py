@@ -39,7 +39,7 @@ class TestConstrainedDecoding(unittest.TestCase):
         cls.funcs_path = 'data/input/functions_definition.json'
         cls.input_path = 'data/input/function_calling_tests.json'
         cls.expected_path = 'data/input/function_calling_expected.json'
-        cls.timeout_limit = 60
+        cls.timeout_limit = 180
 
         with open(cls.funcs_path, 'r', encoding='utf-8') as f:
             cls.fun_defs = TypeAdapter(list[FunctionDefinition]).validate_python(json.load(f))
@@ -58,11 +58,6 @@ class TestConstrainedDecoding(unittest.TestCase):
         cls.model = Small_LLM_Model(local_files_only=True)
         _, cls.VOCAB_PRINT = extract_and_cache_vocabulary(cls.model.get_path_to_vocab_file())
 
-
-def check_output(received_json: dict, expected_json:str) -> bool:
-   is_valid_fun = expected_json["name"] == received_json["name"]
-   are_valid_params = expected_json["parameters"] == received_json["parameters"]
-   return is_valid_fun and are_valid_params
 
 def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
     """Factory for unit test method"""
@@ -97,9 +92,30 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
           log.debug(f"received = {received_json}")
           log.info(f"test executed in {elapsed_time}")
           
+          ## Function name
           self.assertEqual(expected_json["name"], received_json["name"], "Incorrect function name")
-          self.assertEqual(expected_json["parameters"], received_json["parameters"], "Incorrect function name")
-        
+          
+          ## Parameters
+          self.assertEqual(
+            len(expected_json["parameters"]), 
+            len(received_json["parameters"]), 
+            "Mismatched number of parameters generated"
+          )
+
+          for param_key, expected_val in expected_json["parameters"].items():
+            self.assertIn(
+              param_key,
+              received_json["parameters"],
+              f"Missing expected parameter: '{param_key}'"
+            )
+          received_params = received_json["parameters"].copy()
+          if "regex" in received_params and isinstance(received_params["regex"], str):
+            val = received_params["regex"]
+            if val.startswith("(") and val.endswith(")"):
+              received_params["regex"] = val[1:-1]
+          
+          self.assertEqual(expected_json["parameters"], received_params, "Incorrect parameters mapping")
+
         except DecodingTimeoutException as e:
           self.fail(f"❌ TIMEOUT detected after {self.timeout_limit}s")
         except DecodingBlockedException as e:

@@ -24,7 +24,8 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
         f"<|im_start|>user\n{current_prompt}<|im_end|>\n"
         f"<|im_start|>assistant\n"
     )
-    forced_prefix = f'{{"prompt": "{current_prompt}", "name": "'
+    escaped_prompt = json.dumps(current_prompt)[1:-1]
+    forced_prefix = f'{{"prompt": "{escaped_prompt}", "name": "'
     generated = chat_prompt + forced_prefix
     return generated
 
