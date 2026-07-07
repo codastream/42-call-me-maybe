@@ -3,7 +3,7 @@ import os
 from rich.logging import RichHandler
 
 
-def get_logger(level: int = logging.INFO) -> logging.Logger:
+def get_logger(level: int = logging.ERROR) -> logging.Logger:
     """Initialize logger at desired log level"""
     if os.getenv("DEBUG") == "True":
         level = logging.DEBUG

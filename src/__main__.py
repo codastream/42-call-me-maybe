@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+import time
 
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
@@ -82,7 +83,9 @@ except (ValueError, Exception) as e:
 outputs = []
 available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
-for test in tests[8:9]:
+total_start = time.time()
+
+for test in tests[0:]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
@@ -104,6 +107,9 @@ for test in tests[8:9]:
 # ======================
 # WRITE OUTPUT
 # ======================
+
+total_finish = time.time()
+log.critical(f"All inputs decoded within {total_finish - total_start}s")
 
 try:
     with open(output_path, "w", encoding="utf=8") as out_file:
