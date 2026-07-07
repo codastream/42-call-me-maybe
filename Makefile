@@ -1,5 +1,6 @@
 VENV = .venv
 BIN = $(VENV)/bin
+PYTHONPATH_ENV = PYTHONPATH=.
 
 all: run
 
@@ -11,6 +12,15 @@ run:
 
 debug:
 	uv run python -m pdb -m src
+
+test:
+	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py
+
+test-v:
+	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py -v
+
+test-debug:
+	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py --log-level DEBUG
 
 clean:
 	rm -rf __pycache__ .mypy_cache

@@ -13,6 +13,7 @@ from src.checkers import check_args_paths, check_format
 from src.models import FunctionDefinition, TestDefinition
 from src.decode import execute_decoding
 from src.exceptions import DecodingException
+from src.matcher import JSONSchemaMatcher
 
 # =================
 # CONFIG
@@ -85,7 +86,16 @@ for test in tests[0:1]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
-        json_obj = execute_decoding(model, fun_defs, VOCAB_PRINT, test.prompt, available_fun, timeout=30)
+        matcher = JSONSchemaMatcher(fun_defs=fun_defs, initial_prompt=test.prompt.encode('utf-8'))
+        json_obj = execute_decoding(
+            model=model,
+            fun_defs=fun_defs,
+            vocab_print=VOCAB_PRINT,
+            current_prompt=test.prompt,
+            available_fun=available_fun,
+            matcher=matcher,
+            timeout=30
+          )
         log.debug(f"json obj = {json_obj}")
         outputs.append(json_obj)
     except DecodingException as e:

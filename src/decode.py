@@ -44,7 +44,7 @@ def _output_generated_json(generated: str) -> dict:
 
 
 def execute_decoding(model: Small_LLM_Model, fun_defs: list[FunctionDefinition], vocab_print: dict[int, str],
-                     current_prompt: str, available_fun: str,
+                     current_prompt: str, available_fun: str, matcher: JSONSchemaMatcher,
                      timeout: float = 10.0) -> dict:
     """Execute decoding for a given prompt
 
@@ -58,7 +58,6 @@ def execute_decoding(model: Small_LLM_Model, fun_defs: list[FunctionDefinition],
     generated = _init_generated(available_fun, current_prompt)
     input_ids = model.encode(generated)[0].tolist()
 
-    matcher = JSONSchemaMatcher(fun_defs=fun_defs, initial_prompt=current_prompt.encode('utf-8'))
     matcher.state = MatcherState.EXPECT_FUN_NAME
     matcher.current_buffer = b""
 
