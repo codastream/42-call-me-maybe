@@ -3,9 +3,9 @@ import time
 import json
 from typing import cast, Any
 
-from src.matcher import JSONSchemaMatcher, MatcherState
+from src.matcher import JSONSchemaMatcher
 from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
-from src.utils import debug_decoded_candidates, debug_prompt
+from src.utils import debug_decoded_candidates, debug_prompt, debug_automaton_state
 from src.models import FunctionDefinition
 
 import numpy as np
@@ -22,7 +22,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
     chat_prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         f"<|im_start|>user\n{current_prompt}<|im_end|>\n"
-        f"<|im_start|>assistant\n"
+        f"<|im_start|>assistant\n<think>\n\n</think>\n\n"
     )
     escaped_prompt = json.dumps(current_prompt)[1:-1]
     forced_prefix = f'{{"prompt": "{escaped_prompt}", "name": "'
@@ -58,13 +58,9 @@ def execute_decoding(model: Small_LLM_Model, fun_defs: list[FunctionDefinition],
 
     generated = _init_generated(available_fun, current_prompt)
     input_ids = model.encode(generated)[0].tolist()
-
-    matcher.state = MatcherState.EXPECT_FUN_NAME
-    matcher.current_buffer = b""
-
     start_time = time.time()
 
-    while matcher.state != MatcherState.FINISH:
+    while not matcher.is_finished:
 
         if (time.time() - start_time) > timeout:
             raise DecodingTimeoutException(f"timeout reached ({timeout}s)")
@@ -73,18 +69,20 @@ def execute_decoding(model: Small_LLM_Model, fun_defs: list[FunctionDefinition],
 
         authorized_tokens = [t_id for t_id, t_str in vocab_print.items() if t_str and matcher.evaluate_token(t_str)]
         if not authorized_tokens:
-            raise DecodingBlockedException(f"automata blocked at {matcher.state} : no authorized token")
+            raise DecodingBlockedException(f"automata blocked at {matcher.state_label} : no authorized token")
 
         mask = np.full_like(logits, -float('inf'))
         mask[authorized_tokens] = 0
         filtered_logits = logits + mask
-        debug_decoded_candidates(matcher.state, authorized_tokens, logits, filtered_logits, model)
+        debug_decoded_candidates(matcher.state_label, authorized_tokens, logits, filtered_logits, model)
 
         next_token = int(np.argmax(filtered_logits))
         input_ids.append(next_token)
         token_str = model.decode([next_token])
         matcher.consume_token(token_str)
         generated += token_str
+        debug_automaton_state(matcher)
+        # debug_stack(matcher)
         debug_prompt(generated)
 
     return _output_generated_json(generated)

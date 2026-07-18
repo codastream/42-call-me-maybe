@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 try:
     defs_path, input_path, output_path = check_args_paths(args)
-except ValueError as e:
+except Exception as e:
     log.error(f"Error: {e}")
     sys.exit(1)
 
@@ -85,7 +85,7 @@ available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
 total_start = time.time()
 
-for test in tests[0:]:
+for test in tests[8:]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
@@ -98,7 +98,7 @@ for test in tests[0:]:
             available_fun=available_fun,
             matcher=matcher,
             timeout=180
-          )
+        )
         log.debug(f"json obj = {json_obj}")
         outputs.append(json_obj)
     except DecodingException as e:
@@ -112,7 +112,7 @@ total_finish = time.time()
 log.critical(f"All inputs decoded within {total_finish - total_start}s")
 
 try:
-    with open(output_path, "w", encoding="utf=8") as out_file:
+    with open(output_path, "w", encoding="utf-8") as out_file:
         json.dump(outputs, out_file, indent=2, ensure_ascii=False)
         log.info(f"Output has been written in {output_path}")
 except Exception as e:

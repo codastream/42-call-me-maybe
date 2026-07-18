@@ -3,7 +3,7 @@ from enum import Enum, auto
 
 class MatcherState(Enum):
     START = auto()
-    PROMPT = auto()
+    EXPECT_PROMPT = auto()
     EXPECT_FUN_NAME = auto()
     DONE_FUN_NAME = auto()
     EXPECT_PARAM_KEY = auto()

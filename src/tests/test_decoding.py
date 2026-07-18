@@ -7,14 +7,13 @@ import sys
 from typing import Any, Callable
 
 from pydantic import TypeAdapter
-import numpy as np
 from llm_sdk import Small_LLM_Model
 
-from src.matcher import JSONSchemaMatcher, MatcherState
+from src.matcher import JSONSchemaMatcher
 from src.models import FunctionDefinition, TestDefinition
 from src.utils.convert import extract_and_cache_vocabulary
 from src.decode import execute_decoding
-from src.exceptions import DecodingException, DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
+from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
 
 log = logging.getLogger("unittest")
 
@@ -53,7 +52,7 @@ class TestConstrainedDecoding(unittest.TestCase):
                 prompt: data
                 for item in expected_data
                 for prompt, data in item.items()
-              }
+            }
 
         cls.model = Small_LLM_Model(local_files_only=True)
         _, cls.VOCAB_PRINT = extract_and_cache_vocabulary(cls.model.get_path_to_vocab_file())
@@ -74,75 +73,80 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
         start_time = time.time()
 
         try:
-          log.info(f"processing prompt: {current_prompt}")
-          
-          matcher = JSONSchemaMatcher(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode('utf-8'))
-          
-          received_json = execute_decoding(
-            model=self.model,
-            fun_defs=self.fun_defs,
-            vocab_print=self.VOCAB_PRINT,
-            current_prompt=current_prompt,
-            available_fun=self.available_fun,
-            matcher=matcher,
-            timeout=self.timeout_limit
-          )
-          
-          elapsed_time = time.time() - start_time
-          log.debug(f"received = {received_json}")
-          log.info(f"test executed in {elapsed_time}")
-          
-          ## Function name
-          self.assertEqual(expected_json["name"], received_json["name"], "Incorrect function name")
-          
-          ## Parameters
-          self.assertEqual(
-            len(expected_json["parameters"]), 
-            len(received_json["parameters"]), 
-            "Mismatched number of parameters generated"
-          )
+            log.info(f"processing prompt: {current_prompt}")
 
-          for param_key, expected_val in expected_json["parameters"].items():
-            self.assertIn(
-              param_key,
-              received_json["parameters"],
-              f"Missing expected parameter: '{param_key}'"
+            matcher = JSONSchemaMatcher(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode('utf-8'))
+
+            received_json = execute_decoding(
+                model=self.model,
+                fun_defs=self.fun_defs,
+                vocab_print=self.VOCAB_PRINT,
+                current_prompt=current_prompt,
+                available_fun=self.available_fun,
+                matcher=matcher,
+                timeout=self.timeout_limit
             )
-          received_params = received_json["parameters"].copy()
-          if "regex" in received_params and isinstance(received_params["regex"], str):
-            val = received_params["regex"]
-            if val.startswith("(") and val.endswith(")"):
-              received_params["regex"] = val[1:-1]
-          
-          self.assertEqual(expected_json["parameters"], received_params, "Incorrect parameters mapping")
 
-        except DecodingTimeoutException as e:
-          self.fail(f"❌ TIMEOUT detected after {self.timeout_limit}s")
-        except DecodingBlockedException as e:
-          self.fail(f"❌ DECODING BLOCKED. No valid token at step {matcher.state}")
+            elapsed_time = time.time() - start_time
+            log.debug(f"received = {received_json}")
+            log.info(f"test executed in {elapsed_time}")
+
+            assert expected_json is not None
+            assert received_json is not None
+
+            # Function name
+            self.assertEqual(expected_json["name"], received_json["name"], "Incorrect function name")
+
+            # Parameters
+            self.assertEqual(
+                len(expected_json["parameters"]),
+                len(received_json["parameters"]),
+                "Mismatched number of parameters generated"
+            )
+
+            for param_key, expected_val in expected_json["parameters"].items():
+                self.assertIn(
+                    param_key,
+                    received_json["parameters"],
+                    f"Missing expected parameter: '{param_key}'"
+                )
+            received_params = received_json["parameters"].copy()
+            if "regex" in received_params and isinstance(received_params["regex"], str):
+                val = received_params["regex"]
+                if val.startswith("(") and val.endswith(")"):
+                    received_params["regex"] = val[1:-1]
+
+            self.assertEqual(expected_json["parameters"], received_params, "Incorrect parameters mapping")
+
+        except DecodingTimeoutException:
+            self.fail(f"❌ TIMEOUT detected after {self.timeout_limit}s")
+        except DecodingBlockedException:
+            self.fail(f"❌ DECODING BLOCKED. No valid token at step {matcher.state}")
         except InvalidPayloadException as e:
-          self.fail(f"❌ INVALID JSON. {e}")
-    
+            self.fail(f"❌ INVALID JSON. {e}")
+
     return test_method
+
 
 def csv_and_json_injector() -> None:
     """Load test file and inject methods before execution"""
     input_path = 'data/input/function_calling_tests.json'
 
     try:
-      with open(input_path, 'r', encoding="utf-8") as f:
-          tests = TypeAdapter(list[TestDefinition]).validate_python(json.load(f))
-      for idx, test_def in enumerate(tests):
-        clean_name = "".join([c if c.isalnum() else "_" for c in test_def.prompt[:30]])
-        if idx < 10:
-          method_name = f"test_prompt_0{idx}_{clean_name}"
-        else:
-          method_name = f"test_prompt_{idx}_{clean_name}"
-        test_function = make_test_method(test_def)
-        setattr(TestConstrainedDecoding, method_name, test_function)
+        with open(input_path, 'r', encoding="utf-8") as f:
+            tests = TypeAdapter(list[TestDefinition]).validate_python(json.load(f))
+        for idx, test_def in enumerate(tests):
+            clean_name = "".join([c if c.isalnum() else "_" for c in test_def.prompt[:30]])
+            if idx < 10:
+                method_name = f"test_prompt_0{idx}_{clean_name}"
+            else:
+                method_name = f"test_prompt_{idx}_{clean_name}"
+            test_function = make_test_method(test_def)
+            setattr(TestConstrainedDecoding, method_name, test_function)
     except Exception as e:
-      logging.basicConfig(level=logging.DEBUG)
-      log.exception(f"❌ Critical error during dynamic test injection: {e}")
+        logging.basicConfig(level=logging.DEBUG)
+        log.exception(f"❌ Critical error during dynamic test injection: {e}")
+
 
 csv_and_json_injector()
 
@@ -157,5 +161,5 @@ if __name__ == "__main__":
     log.setLevel(numeric_level)
 
     sys.argv = [sys.argv[0]] + remaining_argv
-    
+
     unittest.main()

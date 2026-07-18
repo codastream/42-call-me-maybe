@@ -32,6 +32,13 @@ PRINTABLE_TO_BYTE: dict[str, int] = {}
 
 BYTE_TO_PRINTABLE, PRINTABLE_TO_BYTE = _build_base_printable_mappings()
 
+
+def bytes_to_str(buf: bytes) -> str | None:
+    try:
+        return buf.decode('utf-8', errors='surrogateescape').strip()
+    except Exception:
+        return None
+
 # ==================
 # VOCABULARY CACHES
 # ==================
