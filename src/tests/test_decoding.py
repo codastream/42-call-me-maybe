@@ -28,7 +28,8 @@ class TestConstrainedDecoding(unittest.TestCase):
     fun_defs: list[FunctionDefinition]
     expected_map: dict[str, dict[str, Any]]
     model: Small_LLM_Model
-    VOCAB_PRINT: dict[int, str]
+    TOKENID_TO_PRINT: dict[int, str]
+    TOKENID_TO_BYTES: dict[int, bytes]
     available_fun: str
 
     @classmethod
@@ -55,7 +56,7 @@ class TestConstrainedDecoding(unittest.TestCase):
             }
 
         cls.model = Small_LLM_Model(local_files_only=True)
-        _, cls.VOCAB_PRINT = extract_and_cache_vocabulary(cls.model.get_path_to_vocab_file())
+        cls.TOKENID_TO_BYTES, cls.TOKENID_TO_PRINT = extract_and_cache_vocabulary(cls.model.get_path_to_vocab_file())
 
 
 def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
@@ -80,7 +81,8 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
             received_json = execute_decoding(
                 model=self.model,
                 fun_defs=self.fun_defs,
-                vocab_print=self.VOCAB_PRINT,
+                tokenid_to_print=self.TOKENID_TO_PRINT,
+                tokenid_to_bytes=self.TOKENID_TO_BYTES,
                 current_prompt=current_prompt,
                 available_fun=self.available_fun,
                 matcher=matcher,

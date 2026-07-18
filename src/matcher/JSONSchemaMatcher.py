@@ -64,7 +64,7 @@ class JSONSchemaMatcher:
                 return
             return
 
-    def evaluate_token(self, token_str: str) -> bool:
+    def evaluate_token_bytes(self, token_b: bytes) -> bool:
         """Simulate token insertion and return True if valide
 
         Evaluate byte sequence against current state
@@ -73,17 +73,16 @@ class JSONSchemaMatcher:
         matcher = self._current_matcher
         if matcher is None:
             return False
-        token_bytes = convert_token_str_to_bytes(token_str)
-        test_buf = self.current_buffer_b + token_bytes
+        test_buf = self.current_buffer_b + token_b
         return bool(matcher.evaluate(test_buf))
 
-    def consume_token(self, token_str: str) -> None:
+    def consume_token_bytes(self, token_b: bytes) -> None:
         """Apply token and update automata accordingly"""
 
         matcher = self._current_matcher
         if matcher is None:
             return
-        self.current_buffer_b += token_str.encode('utf-8', errors='surrogateescape')
+        self.current_buffer_b += token_b
         self._process_buffer()
 
     def _advance_pipeline(self, completedMatcher: TokenMatcher, final_buf: bytes) -> None:

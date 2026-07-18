@@ -66,12 +66,12 @@ except ValueError as e:
 model = Small_LLM_Model(local_files_only=True)
 vocab_file_path = model.get_path_to_vocab_file()
 
-VOCAB_RAW_BYTES: dict[int, bytes] = {}
-VOCAB_PRINT: dict[int, str] = {}
+TOKID_TO_BYTES: dict[int, bytes] = {}
+TOKID_TO_PRINT: dict[int, str] = {}
 
 try:
-    VOCAB_RAW_BYTES, VOCAB_PRINT = extract_and_cache_vocabulary(vocab_file_path)
-    log.info(f"Loaded {len(VOCAB_RAW_BYTES)} optimized tokens into cache maps.")
+    TOKID_TO_BYTES, TOKID_TO_PRINT = extract_and_cache_vocabulary(vocab_file_path)
+    log.info(f"Loaded {len(TOKID_TO_BYTES)} optimized tokens into cache maps.")
 except (ValueError, Exception) as e:
     log.error(f"Error: {e}")
     sys.exit(1)
@@ -85,7 +85,7 @@ available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
 total_start = time.time()
 
-for test in tests[8:]:
+for test in tests[8:9]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
@@ -93,7 +93,8 @@ for test in tests[8:]:
         json_obj = execute_decoding(
             model=model,
             fun_defs=fun_defs,
-            vocab_print=VOCAB_PRINT,
+            tokenid_to_print=TOKID_TO_PRINT,
+            tokenid_to_bytes=TOKID_TO_BYTES,
             current_prompt=test.prompt,
             available_fun=available_fun,
             matcher=matcher,
