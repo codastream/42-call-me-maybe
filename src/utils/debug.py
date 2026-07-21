@@ -8,7 +8,7 @@ from typing import Any
 
 from src.matcher import TokenMatcher
 
-IS_DEBUG = False
+IS_DEBUG = True
 PIPELINE_STAGES = ["FUN_NAME", "PARAM_PREFIX", "PARAM_KEY_OR_VAL", "CLOSE"]
 
 

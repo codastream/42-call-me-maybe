@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Tuple
 
 
@@ -31,6 +32,13 @@ BYTE_TO_PRINTABLE: dict[int, str] = {}
 PRINTABLE_TO_BYTE: dict[str, int] = {}
 
 BYTE_TO_PRINTABLE, PRINTABLE_TO_BYTE = _build_base_printable_mappings()
+
+
+def bytes_to_str_raw(buf: bytes) -> str | None:
+    try:
+        return buf.decode('utf-8', errors='surrogateescape')
+    except Exception:
+        return None
 
 
 def bytes_to_str(buf: bytes) -> str | None:

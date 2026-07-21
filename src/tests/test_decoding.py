@@ -9,7 +9,7 @@ from typing import Any, Callable
 from pydantic import TypeAdapter
 from llm_sdk import Small_LLM_Model
 
-from src.matcher import JSONSchemaMatcher
+from src.matcher import AutomatonController
 from src.models import FunctionDefinition, TestDefinition
 from src.utils.convert import extract_and_cache_vocabulary
 from src.decode import execute_decoding
@@ -76,7 +76,7 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
         try:
             log.info(f"processing prompt: {current_prompt}")
 
-            matcher = JSONSchemaMatcher(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode('utf-8'))
+            matcher = AutomatonController(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode())
 
             received_json = execute_decoding(
                 model=self.model,

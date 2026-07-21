@@ -3,25 +3,29 @@ import argparse
 import json
 import sys
 import time
+import logging
+import os
 
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
+load_dotenv()
 from llm_sdk import Small_LLM_Model
 
 from src.utils.convert import extract_and_cache_vocabulary
-from src.config import get_logger
+from src.config import get_logger, setup_logging
 from src.checkers import check_args_paths, check_format
 from src.models import FunctionDefinition, TestDefinition
 from src.decode import execute_decoding
 from src.exceptions import DecodingException
-from src.matcher import JSONSchemaMatcher
+from src.matcher import AutomatonController
 
 # =================
 # CONFIG
 # =================
 
-load_dotenv()
 log = get_logger()
+print("DEBUG env =", os.getenv("DEBUG"), file=sys.stderr)
+print("root level =", logging.getLogger().getEffectiveLevel(), file=sys.stderr)
 
 # =================
 # FILE VALIDATION
@@ -85,11 +89,11 @@ available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
 total_start = time.time()
 
-for test in tests[8:9]:
+for test in tests[1:8]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
-        matcher = JSONSchemaMatcher(fun_defs=fun_defs, initial_prompt=test.prompt.encode('utf-8'))
+        matcher = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
         json_obj = execute_decoding(
             model=model,
             fun_defs=fun_defs,

@@ -97,7 +97,7 @@ __boolean mask__
 - context-free grammars : BNF
 - Trie : optimal data structure to identify valid token ids
 - multi-model compatibility
-- recodingthe tokenizer
+- recoding the tokenizer
 - performance optimization with caching and or batching
 
 # Performance analysis
@@ -119,17 +119,21 @@ __Mitigation__ : Building dictionaries once and for all. Tradeoff : Some latency
 
 ## Minute evaluation of state transition
 
-__Challenge__ : Due to BPE encoding, a token can cover two states. For instance, on `EXPECT_FUN_NAME` state, when evaluating token `my_fun", parameters:"` : `my_fun"` could cover the end of function name and `, parameters:` would already cover next state. We should be able to either refuse it for a smaller token covering only current state (with the risk of slowing down generation or even worth running out of acceptable tokens), or accepting it but advancing the state adequately.
+__Challenge__ : 
+- Due to BPE encoding, a token can cover two states. For instance, on `EXPECT_FUN_NAME` state, when evaluating token `my_fun", parameters:"` : `my_fun"` could cover the end of function name and `, parameters:` would already cover next state. We should be able to either refuse it for a smaller token covering only current state (with the risk of slowing down generation or even worth running out of acceptable tokens), or accepting it but advancing the state adequately.
+- When the generated token is `\\` it interferes with quote counting (necessary to validate that a proper string has been generated)
 
-__Mitigation__ : evaluating token at byte level. Tradeoff : Performance.
+__Mitigation__ : 
+- first attempt by evaluating token at byte level. Tradeoff : Performance was below expected levels
+- second attempt by rebuilding a state machine around a controller class and various kinds of Matcher. Tokens are examined for potential cutting points.
 
 ## Balancing accuracy and speed
 
 __Challenge__ : Adapting the granularity level on which to apply constraints (byte, character, token) proved difficult. Checking every character before consuming the token ensures accuracy, at the cost of performance. Moreover, it does not fully leverage on the possibilities of define state automaton.
 
 __Mitigation__ : 
-
-- prefilter tokens with numpy before iterating over them. Tradeoff : Accuracy
+- comparison on byte sequences rather than character by character
+- caching dictionaries
 
 ## Grokking the theory
 
