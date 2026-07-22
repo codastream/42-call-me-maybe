@@ -8,6 +8,8 @@ from rich.text import Text
 from rich.align import Align
 from rich.console import Console
 import numpy.typing as npt
+import numpy as np
+
 
 from src.matcher.AutomatonDef import AState
 from src.matcher.TokenMatcher import TokenMatcher
@@ -18,11 +20,11 @@ from src.matcher.AutomatonController import AutomatonController
 class DecodingStepState:
     stat_loops: int
     stat_top1_rejected_count: int
-    stat_top1_rejected_pct: int
+    stat_top1_rejected_pct: float
     stat_top_tokens_data: Any
-    stat_avg_rank: int
-    logits: npt.NDArray
-    filtered_logits: npt.NDArray
+    stat_avg_rank: float
+    logits: npt.NDArray[np.int64]
+    filtered_logits: npt.NDArray[np.int64]
     authorized_token_ids: list[int]
     next_token_id: int
     readable_chunk: str
@@ -92,7 +94,7 @@ class DebugDashboard:
         graph = Text()
         for stage in self.stages:
             style = "bold black on yellow" if stage == current_stage\
-                else "bold black on green" if stage == current_stage == AState.FINISH._name\
+                else "bold black on green" if stage == current_stage == AState.FINISH._name_\
                 else "dim white"
             graph.append(f" {stage} ", style=style)
             if stage == AState.PARAM_KEY._name_:
@@ -122,7 +124,7 @@ class DebugDashboard:
         """Get rank value"""
         return int(item['rank'])
 
-    def _build_logit_table(self, top_tokens: List[dict]) -> None:
+    def _build_logit_table(self, top_tokens: List[dict[str, Any]]) -> None:
         """Display first logits and their masks"""
         table = Table(box=None, show_header=True, header_style="bold cyan", expand=True)
         table.add_column("Token", justify="left")
@@ -212,7 +214,7 @@ class DebugDashboard:
 
     def update(self, current_stage: str,
                active_pipeline: List[Any],
-               top_tokens: List[dict],
+               top_tokens: List[dict[str, Any]],
                loops: int,
                rejected_pct: float,
                top1_rejected: int,

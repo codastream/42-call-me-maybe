@@ -87,6 +87,7 @@ dev = [
     { name = "autopep8" },
     { name = "flake8" },
     { name = "mypy" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
@@ -105,6 +106,7 @@ dev = [
     { name = "autopep8", specifier = ">=2.3.2" },
     { name = "flake8", specifier = ">=7.3.0" },
     { name = "mypy", specifier = ">=1.20.2" },
+    { name = "pydantic", specifier = ">=2.13.3" },
 ]
 
 [[package]]

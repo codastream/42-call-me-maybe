@@ -109,6 +109,7 @@ for test in tests[:]:
         log.error(f"Decoding error for prompt '{test.prompt}': {e}")
     except KeyboardInterrupt as e:
         log.error(f"Decoding interrupted (Ctrl + C) : {e}")
+        exit(1)
     except Exception:
         log.error("Unexpected error")
 

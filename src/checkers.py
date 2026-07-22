@@ -2,9 +2,11 @@ import os
 import argparse
 import json
 from pathlib import Path
-from typing import Tuple, cast
+from typing import Tuple, TypeVar
 from pydantic import TypeAdapter, ValidationError
-from src.models import FunctionDefinition
+
+
+T = TypeVar("T")
 
 
 def _check_file_permissions(file_path: str, mode: str) -> bool:
@@ -82,7 +84,7 @@ def check_args_paths(args: argparse.Namespace) -> Tuple[str, str, str]:
     return (defs_path, input_path, output_path)
 
 
-def check_format(path: str, adapter: TypeAdapter) -> list[FunctionDefinition]:
+def check_format(path: str, adapter: TypeAdapter[T]) -> T:
     """Check that json content follows model
 
     Raises:
@@ -91,8 +93,7 @@ def check_format(path: str, adapter: TypeAdapter) -> list[FunctionDefinition]:
     try:
         with open(path, "r") as file:
             raw = json.load(file)
-            defs = adapter.validate_python(raw)
-            return cast(list[FunctionDefinition], defs)
+            return adapter.validate_python(raw)
     except json.JSONDecodeError:
         raise ValueError(f"Error: {path} does not have a valid JSON structure.")
     except ValidationError:

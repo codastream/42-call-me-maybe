@@ -38,6 +38,6 @@ lint:
 
 lint-strict:
 	uv run flake8 .
-	uv run mypy . --strict
+	uv run python -m mypy src --explicit-package-bases --strict
 
 .PHONY: all install run debug clean lint lint-strict format

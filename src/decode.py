@@ -38,7 +38,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
     return generated
 
 
-def _output_generated_json(generated: str) -> dict:
+def _output_generated_json(generated: str) -> dict[Any, Any]:
     """Return a valid JSON"""
     prefix = '{\"prompt\":'
     json_start_idx = generated.find(prefix)
@@ -67,7 +67,7 @@ def execute_with_dashboard(model: Small_LLM_Model,
                            tokenid_to_bytes: dict[int, bytes],
                            timeout: float = 10.0,
                            is_debug: bool = False,
-                           ) -> dict:
+                           ) -> dict[Any, Any]:
     """Wrapper for execution with dashboard"""
 
     dashboard = DebugDashboard(pipeline_stages=AState._member_names_)
@@ -77,6 +77,8 @@ def execute_with_dashboard(model: Small_LLM_Model,
 
         def ui_callback(state: DecodingStepState, ctrl: AutomatonController) -> bool:
 
+            handler = get_dashboard_handler()
+            logs = list(handler.records) if handler else []
             live.update(
                 dashboard.update(
                     current_stage=ctrl.state._name_,
@@ -89,7 +91,7 @@ def execute_with_dashboard(model: Small_LLM_Model,
                     generated_text=_get_dashboard_generated(state.old_generated),
                     generated_added_text=state.readable_chunk,
                     step_hint="[n]ext [c]ontinue [j]ump steps [q]uit",
-                    logs=list(get_dashboard_handler().records),
+                    logs=logs,
                 )
             )
             live.refresh()
@@ -109,9 +111,9 @@ def execute_with_dashboard(model: Small_LLM_Model,
 
 
 def _update_metrics(
-    logits: npt.NDArray,
+    logits: npt.NDArray[np.int64],
     authorized_tokens_ids: list[int],
-    filtered_logits: npt.NDArray,
+    filtered_logits: npt.NDArray[np.int64],
     generated: str,
     readable_chunk: str,
     next_token_id: int,
@@ -163,7 +165,7 @@ def _update_metrics(
         old_generated=generated,
         readable_chunk=readable_chunk,
         current_stage=controller.state._name_,
-        controller=AutomatonController,
+        controller=controller,
         tokenid_to_bytes=tokenid_to_bytes,
         selected_ranks=stat_selected_ranks
     )
@@ -177,7 +179,7 @@ def execute_decoding(model: Small_LLM_Model,
                      controller: AutomatonController,
                      timeout: float = 10.0,
                      is_debug: bool = True,
-                     on_step: Callable[[DecodingStepState, AutomatonController], bool] | None = None) -> dict:
+                     on_step: Callable[[DecodingStepState, AutomatonController], bool] | None = None) -> dict[Any, Any]:
     """Core decoding loop"""
 
     generated = _init_generated(available_fun, current_prompt)

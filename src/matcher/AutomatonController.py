@@ -1,6 +1,5 @@
 
 import logging
-from typing import cast
 
 from src.matcher.TokenMatcher import TokenMatcher, StaticSequenceMatcher, ChoiceMatcher, ValueMatcher
 from src.matcher.AutomatonDef import AState, AUTOMATON
@@ -20,7 +19,7 @@ class AutomatonController:
 
         self.state = AState.FUN_NAME_VAL
         self.fun_defs: list[FunctionDefinition] = fun_defs
-        self.selected_function: FunctionDefinition = None
+        self.selected_function: FunctionDefinition | None = None
         self.evaluated_params: set[str] = set()
         self.selected_param_key: str | None = None
         self.pipeline: list[TokenMatcher] = []
@@ -30,7 +29,7 @@ class AutomatonController:
     @property
     def state_label(self) -> str:
         """Return human readable label"""
-        return cast(str, AUTOMATON[self.state].label)
+        return str(AUTOMATON[self.state].label)
 
     @property
     def is_finished(self) -> bool:
@@ -44,7 +43,9 @@ class AutomatonController:
 
     def _remaining_keys(self) -> list[str]:
         """Return remaing param keys to evaluate"""
-        return [k for k in self.selected_function.parameters if k not in self.evaluated_params]
+        if self.selected_function:
+            return [k for k in self.selected_function.parameters if k not in self.evaluated_params]
+        return []
 
     def _push_next(self) -> None:
         """Decide which matcher should go on stack"""
@@ -59,20 +60,26 @@ class AutomatonController:
                 targets = [prefix + f'"{k}": '.encode() for k in self._remaining_keys()]
                 self.pipeline.insert(0, ChoiceMatcher(targets))
             case AState.PARAM_VAL:
-                p_type = self.selected_function.parameters[self.selected_param_key].type
-                self.pipeline.insert(0, ValueMatcher(p_type))
+                if self.selected_function and self.selected_param_key:
+                    p_type = self.selected_function.parameters[self.selected_param_key].type
+                    self.pipeline.insert(0, ValueMatcher(p_type))
             case AState.CLOSE:
                 self.pipeline.insert(0, StaticSequenceMatcher(b'}}'))
 
     def _advance_state(self) -> None:
         """Transition following a fixed or dynamic order"""
+        if not self.state:
+            return
         if self.state == AState.PARAM_VAL:
             if self.selected_param_key:
                 self.evaluated_params.add(self.selected_param_key)
             self.selected_param_key = None
             self.state = AState.PARAM_KEY if self._remaining_keys() else AState.CLOSE
         else:
-            self.state = AUTOMATON[self.state].next
+            next_state = AUTOMATON[self.state].next
+            if next_state is None:
+                return
+            self.state = next_state
         if self.state != AState.FINISH:
             self._push_next()
 

@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 from rich.table import Table
 from rich.markup import escape
 from rich import print as rprint
@@ -40,8 +41,8 @@ def debug_prompt(generated: str) -> None:
         rprint(f"Generated: [bold green]{escape(generated[content_start_idx:])}[/bold green]")
 
 
-def debug_decoded_candidates(context: str, authorized_tokens: list[int], logits: np.ndarray,
-                             filtered_logits: np.ndarray, model: Small_LLM_Model) -> None:
+def debug_decoded_candidates(context: str, authorized_tokens: list[int], logits: npt.NDArray[np.int64],
+                             filtered_logits: npt.NDArray[np.int64], model: Small_LLM_Model) -> None:
     """Print first candidate tokens"""
 
     if not IS_DEBUG:
