@@ -93,7 +93,7 @@ def execute_with_dashboard(model: Small_LLM_Model,
             )
             live.refresh()
             step_ctrl.wait()
-            return not step_ctrl.should_quit
+            return bool(step_ctrl.should_quit)
 
         return execute_decoding(
             model=model,
@@ -225,7 +225,9 @@ def execute_decoding(model: Small_LLM_Model,
             stat_selected_ranks = dec_state.selected_ranks
             stat_top1_rejected_count = dec_state.stat_top1_rejected_count
             if on_step:
-                on_step(dec_state, controller)
+                should_quit = on_step(dec_state, controller)
+                if should_quit:
+                    break
         generated += readable_chunk
 
     return _output_generated_json(generated)
