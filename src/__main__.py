@@ -1,4 +1,12 @@
 
+from src.matcher import AutomatonController
+from src.exceptions import DecodingException
+from src.decode import execute_with_dashboard
+from src.models import FunctionDefinition, TestDefinition
+from src.checkers import check_args_paths, check_format
+from src.config import get_logger
+from src.utils.convert import extract_and_cache_vocabulary
+from llm_sdk import Small_LLM_Model
 import argparse
 import json
 import sys
@@ -9,15 +17,7 @@ import os
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
 load_dotenv()
-from llm_sdk import Small_LLM_Model
 
-from src.utils.convert import extract_and_cache_vocabulary
-from src.config import get_logger, setup_logging
-from src.checkers import check_args_paths, check_format
-from src.models import FunctionDefinition, TestDefinition
-from src.decode import execute_decoding
-from src.exceptions import DecodingException
-from src.matcher import AutomatonController
 
 # =================
 # CONFIG
@@ -89,32 +89,35 @@ available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
 total_start = time.time()
 
-for test in tests[1:8]:
+for test in tests[7:8]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
-        matcher = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
-        json_obj = execute_decoding(
+        controller = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
+        json_obj = execute_with_dashboard(
             model=model,
-            fun_defs=fun_defs,
-            tokenid_to_print=TOKID_TO_PRINT,
-            tokenid_to_bytes=TOKID_TO_BYTES,
             current_prompt=test.prompt,
+            tokenid_to_bytes=TOKID_TO_BYTES,
             available_fun=available_fun,
-            matcher=matcher,
-            timeout=180
+            controller=controller,
+            timeout=180,
+            is_debug=True
         )
         log.debug(f"json obj = {json_obj}")
         outputs.append(json_obj)
     except DecodingException as e:
         log.error(f"Decoding error for prompt '{test.prompt}': {e}")
+    except KeyboardInterrupt as e:
+        log.error(f"Decoding interrupted (Ctrl + C) : {e}")
+    except Exception:
+        log.error("Unexpected error")
 
 # ======================
 # WRITE OUTPUT
 # ======================
 
 total_finish = time.time()
-log.critical(f"All inputs decoded within {total_finish - total_start}s")
+log.info(f"All inputs decoded within {total_finish - total_start:.2f}s")
 
 try:
     with open(output_path, "w", encoding="utf-8") as out_file:

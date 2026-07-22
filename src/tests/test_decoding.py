@@ -76,17 +76,16 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
         try:
             log.info(f"processing prompt: {current_prompt}")
 
-            matcher = AutomatonController(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode())
+            controller = AutomatonController(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode())
 
             received_json = execute_decoding(
                 model=self.model,
-                fun_defs=self.fun_defs,
-                tokenid_to_print=self.TOKENID_TO_PRINT,
                 tokenid_to_bytes=self.TOKENID_TO_BYTES,
                 current_prompt=current_prompt,
                 available_fun=self.available_fun,
-                matcher=matcher,
-                timeout=self.timeout_limit
+                controller=controller,
+                timeout=self.timeout_limit,
+                is_debug=False
             )
 
             elapsed_time = time.time() - start_time
@@ -123,7 +122,7 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
         except DecodingTimeoutException:
             self.fail(f"❌ TIMEOUT detected after {self.timeout_limit}s")
         except DecodingBlockedException:
-            self.fail(f"❌ DECODING BLOCKED. No valid token at step {matcher.state}")
+            self.fail(f"❌ DECODING BLOCKED. No valid token at step {controller.state}")
         except InvalidPayloadException as e:
             self.fail(f"❌ INVALID JSON. {e}")
 

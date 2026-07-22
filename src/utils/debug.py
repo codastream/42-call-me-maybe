@@ -1,6 +1,5 @@
 import numpy as np
 from rich.table import Table
-from rich.text import Text
 from rich.markup import escape
 from rich import print as rprint
 from llm_sdk import Small_LLM_Model
@@ -10,59 +9,6 @@ from src.matcher import TokenMatcher
 
 IS_DEBUG = True
 PIPELINE_STAGES = ["FUN_NAME", "PARAM_PREFIX", "PARAM_KEY_OR_VAL", "CLOSE"]
-
-
-def isExpectedMatcher(m: TokenMatcher, expected: str) -> bool:
-    name = type(m).__name__
-    if name == expected:
-        return True
-    return False
-
-
-def isChoiceMatcher(m: TokenMatcher) -> bool:
-    return isExpectedMatcher(m, "ChoiceMatcher")
-
-
-def isStaticSequenceMatcher(m: TokenMatcher) -> bool:
-    return isExpectedMatcher(m, "StaticSequenceMatcher")
-
-
-def isParamMatcher(m: TokenMatcher) -> bool:
-    return isExpectedMatcher(m, "ParamMatcher")
-
-
-def _matcher_stage_label(m: TokenMatcher) -> str:
-    """Display state name according to TokenMatcher type"""
-    if isChoiceMatcher(m):
-        return "FUN_NAME"
-    if isParamMatcher(m):
-        return "PARAM_KEY_OR_VAL"
-    if isStaticSequenceMatcher(m):
-        return "PARAM_PREFIX" if b'parameters' in m.target else "CLOSE"
-    return "UNKNOWN"
-
-
-def debug_automaton_state(matcher: Any) -> None:
-    """Display current automaton state"""
-
-    if not IS_DEBUG:
-        return
-    if hasattr(matcher, "_current_matcher"):
-        current = matcher._current_matcher
-    current_label = _matcher_stage_label(current) if current else "FINISHED"
-    current_sub = None
-    if isParamMatcher(matcher):
-        current_sub = current.sub_state.name
-
-    graph = Text()
-    for stage in PIPELINE_STAGES:
-        style = "bold black on yellow" if stage == current_label else "dim_white"
-        graph.append(f" {stage} ", style=style)
-        graph.append(" -> ", style="dim")
-    graph.append(" FINISHED ", style="bold black on green" if matcher.is_finished else "dim white")
-    rprint(graph)
-    if current_sub:
-        rprint(f" [dim]sub state:[/dim] [bold magenta]{current_sub}[/bold magenta]")
 
 
 def debug_stack(matcher: Any) -> None:

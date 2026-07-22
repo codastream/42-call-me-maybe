@@ -6,22 +6,23 @@ from rich.logging import RichHandler
 
 
 class DashboardLogHandler(logging.Handler):
-  """Bufferize logs"""
-  
-  def __init__(self, maxlen=5):
-    super().__init__()
-    self.records: deque[str] = deque(maxlen=maxlen)
+    """Bufferize logs"""
 
-  def emit(self, record):
-    try:
-      self.records.append(self.format(record))
-    except Exception:
-      self.handleError(record)
+    def __init__(self, maxlen: int = 5) -> None:
+        super().__init__()
+        self.records: deque[str] = deque(maxlen=maxlen)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self.records.append(self.format(record))
+        except Exception:
+            self.handleError(record)
 
 
 _console_handler: RichHandler | None = None
 _dashboard_handler: DashboardLogHandler | None = None
 _configured = False
+
 
 def setup_logging(level: int = logging.DEBUG) -> None:
     """Configure logging"""
@@ -49,16 +50,22 @@ def get_logger(name: str = "match") -> logging.Logger:
     setup_logging()
     return logging.getLogger(name)
 
-def get_dashboard_handler() -> DashboardLogHandler:
+
+def get_dashboard_handler() -> DashboardLogHandler | None:
+    """Return DashboardLogHandler"""
     setup_logging()
-    return _dashboard_handler
+    if _dashboard_handler:
+        return _dashboard_handler
+    return None
+
 
 def suspend_console_logging() -> None:
-   """To be called when rich.Live is active"""
-   if _console_handler in logging.root.handlers:
-      logging.root.removeHandler(_console_handler)
+    """To be called when rich.Live is active"""
+    if _console_handler in logging.root.handlers:
+        logging.root.removeHandler(_console_handler)
+
 
 def resume_console_logging() -> None:
     """To be called after rich.Live"""
     if _console_handler is not None and _console_handler not in logging.root.handlers:
-      logging.root.addHandler(_console_handler)
+        logging.root.addHandler(_console_handler)

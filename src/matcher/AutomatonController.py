@@ -1,11 +1,10 @@
 
-# from src.matcher.MatcherState import MatcherState
+import logging
+from typing import cast
+
 from src.matcher.TokenMatcher import TokenMatcher, StaticSequenceMatcher, ChoiceMatcher, ValueMatcher
 from src.matcher.AutomatonDef import AState, AUTOMATON
 from src.models.FunctionDefinition import FunctionDefinition
-from src.models.TypeDef import TypeDef
-
-import logging
 
 
 class AutomatonController:
@@ -17,6 +16,7 @@ class AutomatonController:
     log = logging.getLogger('match')
 
     def __init__(self, fun_defs: list[FunctionDefinition], initial_prompt: bytes):
+        """Initialize controller"""
 
         self.state = AState.FUN_NAME_VAL
         self.fun_defs: list[FunctionDefinition] = fun_defs
@@ -25,22 +25,25 @@ class AutomatonController:
         self.selected_param_key: str | None = None
         self.pipeline: list[TokenMatcher] = []
         self.current_buffer_b: bytes = b""
-        self._push_next() 
+        self._push_next()
 
     @property
     def state_label(self) -> str:
-        return AUTOMATON[self.state].label
+        """Return human readable label"""
+        return cast(str, AUTOMATON[self.state].label)
 
     @property
     def is_finished(self) -> bool:
-        return self.state == AState.FINISH
+        """Return True if automaton reached FINISH state"""
+        return bool(self.state == AState.FINISH)
 
     @property
     def _top(self) -> TokenMatcher | None:
+        """Return first matcher of the stack"""
         return self.pipeline[0] if self.pipeline else None
 
-
     def _remaining_keys(self) -> list[str]:
+        """Return remaing param keys to evaluate"""
         return [k for k in self.selected_function.parameters if k not in self.evaluated_params]
 
     def _push_next(self) -> None:
@@ -64,7 +67,8 @@ class AutomatonController:
     def _advance_state(self) -> None:
         """Transition following a fixed or dynamic order"""
         if self.state == AState.PARAM_VAL:
-            self.evaluated_params.add(self.selected_param_key)
+            if self.selected_param_key:
+                self.evaluated_params.add(self.selected_param_key)
             self.selected_param_key = None
             self.state = AState.PARAM_KEY if self._remaining_keys() else AState.CLOSE
         else:
@@ -73,49 +77,27 @@ class AutomatonController:
             self._push_next()
 
     def _get_next_matcher_after_values(self) -> TokenMatcher:
-        if self._remaining_keys():
-            targets = [f', "{k}": '.encode() for k in self._remaining_keys()]
+        """Peek next possible matcher after a ValueMatcher
+
+        either ChoiceMatcher or StaticSequenceMatcher
+        """
+        next_targets = [k for k in self._remaining_keys() if k != self.selected_param_key]
+        if next_targets:
+            targets = [f', "{k}": '.encode() for k in next_targets]
             return ChoiceMatcher(targets)
         else:
             return StaticSequenceMatcher(b"}}")
-
-    def _quick_prefilter_at_state_change(self, token_b: bytes) -> bool:
-        top = self._top
-
-        if not isinstance(top, ValueMatcher):
-            return True
-        if self.current_buffer_b:
-            return True
-
-        if top.type == TypeDef.STRING:
-          if not self.current_buffer_b:
-              return token_b.startswith(b'"')
-          return True
-        
-        if top.type == TypeDef.NUMBER:
-            if not self.current_buffer_b:
-                return token_b[:1] in (b'0', b'1', b'2', b'3',b'4',b'5',b'6',b'7',b'8',b'9',b'-',b'+',b'.')
-            return True
-        
-        if top.type == TypeDef.BOOLEAN:
-            if not self.current_buffer_b:
-                return token_b[:1] in (b't', b'f')
-            return True
-        return True
-
 
     def evaluate_tokens(self, tokenid_to_bytes: dict[int, bytes]) -> list[int]:
         """Prefilter and evaluate token against current state"""
         top = self._top
         if top is None:
-            return
+            return []
 
         valid_t_ids = []
         for (t_id, t_b) in tokenid_to_bytes.items():
-          # if not self._quick_prefilter_at_state_change(t_b):
-          #   continue
-          if self.evaluate_token_bytes(t_b):
-              valid_t_ids.append(t_id)
+            if self.evaluate_token_bytes(t_b):
+                valid_t_ids.append(t_id)
         return valid_t_ids
 
     def evaluate_token_bytes(self, token_b: bytes) -> bool:
@@ -124,20 +106,19 @@ class AutomatonController:
         top = self._top
         if top is None:
             return False
-        
+
         combined_buf = self.current_buffer_b + token_b
         if top.evaluate(combined_buf):
             return True
 
-        # lookahead
-        if isinstance(top, ValueMatcher) and top.is_unambiguous_terminal(combined_buf):
+        if isinstance(top, ValueMatcher):
             leftover = top.leftover_bytes(combined_buf)
-            # self.log.debug(f"evaluate_token_bytes for ValueMatcher leftover={leftover!r}")
             if leftover:
                 next_matcher = self._get_next_matcher_after_values()
                 if next_matcher and next_matcher.evaluate(leftover):
+                    self.log.debug(f"evaluate_token_bytes - ValueMatcher - leftover ok for next matcher={leftover!r}")
                     return True
-        
+
         return False
 
     def consume_token_bytes(self, token_b: bytes) -> None:
@@ -145,30 +126,43 @@ class AutomatonController:
         log = logging.getLogger('match')
 
         self.current_buffer_b += token_b
-        
+
         while not self.is_finished:
-          top = self._top
-          if top is None:
-              return
+            top = self._top
+            if top is None:
+                return
 
-          if not top.is_complete(self.current_buffer_b):
-              break
+            if not isinstance(top, ValueMatcher) and not top.is_complete(self.current_buffer_b):
+                break
 
-          top.commit(self.current_buffer_b)
+            top.commit(self.current_buffer_b)
 
-          log.debug(f"consume : top={top.display_name()} buf={self.current_buffer_b!r} is_complete=True")
+            log.debug(f"consume : top={top.display_name()} buf={self.current_buffer_b!r} is_complete=True")
 
-          leftover = b""
-          if hasattr(top, "leftover_bytes"):
-              leftover = top.leftover_bytes(self.current_buffer_b)
-              log.debug(f"consume : leftover = {leftover}")
-          
-          if self.state == AState.FUN_NAME_VAL:
-              fun_name = self.current_buffer_b.decode(errors='surrogateescape')
-              self.selected_function = next(f for f in self.fun_defs if f.name == fun_name)
-          elif self.state == AState.PARAM_KEY:
-              self.selected_param_key = self.current_buffer_b.decode().split('"')[1]
-              log.debug(f"consume : selected param = {self.selected_param_key}")
-          self.pipeline.pop(0)
-          self.current_buffer_b = leftover
-          self._advance_state()
+            leftover = b""
+            if hasattr(top, "leftover_bytes"):
+                leftover = top.leftover_bytes(self.current_buffer_b)
+                log.debug(f"consume : leftover = {leftover!r}")
+
+            if isinstance(top, ValueMatcher) and not top.is_unambiguous_terminal(self.current_buffer_b):
+                if not leftover:
+                    return
+                next_matcher = self._get_next_matcher_after_values()
+                if next_matcher and not next_matcher.evaluate(leftover):
+                    return
+
+            if self.state == AState.FUN_NAME_VAL:
+                fun_name = self.current_buffer_b.decode(errors='surrogateescape')
+                self.selected_function = next(f for f in self.fun_defs if f.name == fun_name)
+            elif self.state == AState.PARAM_KEY:
+                self.selected_param_key = self.current_buffer_b.decode().split('"')[1]
+                log.debug(f"consume : selected param = {self.selected_param_key}")
+
+            self.current_buffer_b = leftover
+            self.pipeline.pop(0)
+            log.debug(
+                f"consume : popped {top.display_name()}, going to next state, leftover going to next = {leftover!r}")
+            self._advance_state()
+            log.debug(
+                f"consume : after advance → state={self.state}, current_buffer_b={self.current_buffer_b!r}, \
+                  pipeline top={self._top.display_name() if self._top else None}")

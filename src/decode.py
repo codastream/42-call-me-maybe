@@ -1,26 +1,26 @@
-import logging
 import time
 import json
 import codecs
-from typing import cast, Any
+from typing import cast, Any, Callable
+
+from rich.live import Live
+import numpy as np
+import numpy.typing as npt
+from llm_sdk import Small_LLM_Model
 
 from src.matcher import AutomatonController
-from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
-from src.utils import debug_decoded_candidates
-from src.models import FunctionDefinition
-from src.utils.DebugDashboard import DebugDashboard
 from src.matcher.AutomatonDef import AState
-from rich.live import Live
+from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
+from src.utils.DebugDashboard import DebugDashboard, DecodingStepState
 from src.utils.StepController import StepController
-from src.config import get_logger, suspend_console_logging, resume_console_logging, get_dashboard_handler
-from src.matcher import ValueMatcher
+from src.config import get_logger, get_dashboard_handler
 
-import numpy as np
-from llm_sdk import Small_LLM_Model
 
 log = get_logger()
 
+
 def _init_generated(available_fun: str, current_prompt: str) -> str:
+    """Force part of the output"""
     log.debug(f"Current prompt = {current_prompt}")
 
     system_prompt = f"You are a function calling router. \
@@ -38,6 +38,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
 
 
 def _output_generated_json(generated: str) -> dict:
+    """Return a valid JSON"""
     prefix = '{\"prompt\":'
     json_start_idx = generated.find(prefix)
     if json_start_idx == -1:
@@ -51,133 +52,180 @@ def _output_generated_json(generated: str) -> dict:
 
 
 def _get_dashboard_generated(generated: str) -> str:
+    """Extract relevant generated text for debugging"""
     content_start_idx = generated.index('"prompt":')
     if content_start_idx != -1:
         return generated[content_start_idx:]
     return generated
 
-def execute_decoding(model: Small_LLM_Model, fun_defs: list[FunctionDefinition],
-                     tokenid_to_print: dict[int, str],
+
+def execute_with_dashboard(model: Small_LLM_Model,
+                           current_prompt: str,
+                           available_fun: str,
+                           controller: AutomatonController,
+                           tokenid_to_bytes: dict[int, bytes],
+                           timeout: float = 10.0,
+                           is_debug: bool = False,
+                           ) -> dict:
+    """Wrapper for execution with dashboard"""
+
+    dashboard = DebugDashboard(pipeline_stages=AState._member_names_)
+    step_ctrl = StepController(enabled=True)
+
+    with Live(dashboard.layout, refresh_per_second=10, auto_refresh=False, screen=False) as live:
+
+        def ui_callback(state: DecodingStepState, ctrl: AutomatonController) -> bool:
+
+            live.update(
+                dashboard.update(
+                    current_stage=ctrl.state._name_,
+                    active_pipeline=getattr(ctrl, "pipeline", []),
+                    top_tokens=state.stat_top_tokens_data,
+                    loops=state.stat_loops,
+                    rejected_pct=state.stat_top1_rejected_pct,
+                    top1_rejected=state.stat_top1_rejected_count,
+                    avg_rank=state.stat_avg_rank,
+                    generated_text=_get_dashboard_generated(state.old_generated),
+                    generated_added_text=state.readable_chunk,
+                    step_hint="[n]ext [c]ontinue [j]ump steps [q]uit",
+                    logs=list(get_dashboard_handler().records),
+                )
+            )
+            live.refresh()
+            step_ctrl.wait()
+            return not step_ctrl.should_quit
+
+        return execute_decoding(
+            model=model,
+            tokenid_to_bytes=tokenid_to_bytes,
+            current_prompt=current_prompt,
+            available_fun=available_fun,
+            controller=controller,
+            timeout=timeout,
+            is_debug=is_debug,
+            on_step=ui_callback
+        )
+
+
+def _update_metrics(
+    logits: npt.NDArray,
+    authorized_tokens_ids: list[int],
+    filtered_logits: npt.NDArray,
+    generated: str,
+    readable_chunk: str,
+    next_token_id: int,
+    tokenid_to_bytes: dict[int, bytes],
+    stat_loops: int,
+    stat_top1_rejected_count: int,
+    stat_selected_ranks: list[int],
+    controller: AutomatonController
+) -> DecodingStepState:
+    """Consolidate metrics into a DecodingStepState Object"""
+
+    raw_top_1_id = int(np.argsort(logits)[-1])
+    if raw_top_1_id not in authorized_tokens_ids:
+        stat_top1_rejected_count += 1
+
+    stat_top1_rejected_pc = stat_top1_rejected_count / stat_loops
+
+    known_ids = set(tokenid_to_bytes.keys())
+    top_global_ids = [int(t_id) for t_id in np.argsort(logits)[::-1] if int(t_id) in known_ids][:10]
+    sorted_global_ids = np.argsort(logits)[::-1]
+    top_tokens_data = []
+    for t_id in top_global_ids:
+        rank = int(np.where(sorted_global_ids == t_id)[0][0]) + 1
+        disp_token_bytes = tokenid_to_bytes[t_id]
+        try:
+            disp_readable = disp_token_bytes.decode("utf-8", errors="replace")
+        except Exception:
+            disp_readable = repr(disp_token_bytes)
+        top_tokens_data.append({
+            'token': disp_readable,
+            'logit': float(logits[t_id]),
+            'filtered': float(filtered_logits[t_id]),
+            'rank': rank
+        })
+    actual_rank = int(np.where(sorted_global_ids == next_token_id)[0][0]) + 1
+    stat_selected_ranks.append(actual_rank)
+    stat_avg_rank = sum(stat_selected_ranks) / len(stat_selected_ranks)
+
+    state = DecodingStepState(
+        stat_loops=stat_loops,
+        stat_top1_rejected_count=stat_top1_rejected_count,
+        stat_top1_rejected_pct=stat_top1_rejected_pc,
+        stat_top_tokens_data=top_tokens_data,
+        stat_avg_rank=stat_avg_rank,
+        logits=logits,
+        filtered_logits=filtered_logits,
+        authorized_token_ids=authorized_tokens_ids,
+        next_token_id=next_token_id,
+        old_generated=generated,
+        readable_chunk=readable_chunk,
+        current_stage=controller.state._name_,
+        controller=AutomatonController,
+        tokenid_to_bytes=tokenid_to_bytes,
+        selected_ranks=stat_selected_ranks
+    )
+    return state
+
+
+def execute_decoding(model: Small_LLM_Model,
                      tokenid_to_bytes: dict[int, bytes],
-                     current_prompt: str, available_fun: str, matcher: AutomatonController,
-                     timeout: float = 10.0, is_debug: bool = True) -> dict:
-    """Execute decoding for a given prompt
-
-    Returns:
-      JSON dict
-
-    Raises:
-      Decoding Exception when timeout, no authorized tokens or invalid json
-    """
+                     current_prompt: str,
+                     available_fun: str,
+                     controller: AutomatonController,
+                     timeout: float = 10.0,
+                     is_debug: bool = True,
+                     on_step: Callable[[DecodingStepState, AutomatonController], bool] | None = None) -> dict:
+    """Core decoding loop"""
 
     generated = _init_generated(available_fun, current_prompt)
     input_ids = model.encode(generated)[0].tolist()
     utf8_decoder = codecs.getincrementaldecoder('utf-8')(errors='strict')
-
-    loops = 0
-    # total_rejected_tokens = 0
-    # total_possible_tokens = len(tokenid_to_bytes.keys())
-    top1_rejected_count = 0
-    selected_ranks = []
-    MIN_WIDTH, MIN_HEIGHT = 80, 24
-    dashboard = DebugDashboard(pipeline_stages=AState._member_names_)
-    if dashboard.console.size.width < MIN_WIDTH or dashboard.console.size.height < MIN_HEIGHT:
-      raise RuntimeError(
-          f"Terminal too small ({dashboard.console.size}), "
-          f"minimum {MIN_WIDTH}x{MIN_HEIGHT}"
-      )
-    step_ctrl = StepController(enabled=is_debug)
-
     start_time = time.time()
+    stat_loops = 0
+    stat_top1_rejected_count = 0
+    stat_selected_ranks: Any = []
 
-    # suspend_console_logging()
-    try:
-      with Live(dashboard.layout, refresh_per_second=10, auto_refresh=False, screen=False) as live:
-          while not matcher.is_finished:
-              loops += 1
-              if (time.time() - start_time) > timeout:
-                  raise DecodingTimeoutException(f"timeout reached ({timeout}s)")
-              logits = np.array(model.get_logits_from_input_ids(input_ids))
+    while not controller.is_finished:
+        if (time.time() - start_time) > timeout:
+            raise DecodingTimeoutException(f"timeout reached ({timeout}s)")
+        logits = np.array(model.get_logits_from_input_ids(input_ids))
+        authorized_tokens_ids = controller.evaluate_tokens(tokenid_to_bytes)
 
+        if not authorized_tokens_ids:
+            raise DecodingBlockedException(f"automata blocked at {controller.state_label} : no authorized token")
 
-              authorized_tokens_ids = matcher.evaluate_tokens(tokenid_to_bytes)
-              
-              # [t_id for t_id, t_str in tokenid_to_print.items(
-              # ) if t_str and matcher.evaluate_token_bytes(tokenid_to_bytes[t_id])]
-              if not authorized_tokens_ids:
-                  # resume_console_logging()
-                  raise DecodingBlockedException(f"automata blocked at {matcher.state_label} : no authorized token")
+        mask = np.full_like(logits, -float('inf'))
+        mask[authorized_tokens_ids] = 0
+        filtered_logits = logits + mask
 
-              # step_rejected = total_possible_tokens - len(authorized_tokens_ids)
-              # total_rejected_tokens += step_rejected
+        next_token_id = int(np.argmax(filtered_logits))
 
-              raw_top_1_id = int(np.argsort(logits)[-1])
-              if raw_top_1_id not in authorized_tokens_ids:
-                  top1_rejected_count += 1
-              rejected_pct = top1_rejected_count / loops
+        input_ids.append(next_token_id)
+        token_bytes = tokenid_to_bytes[next_token_id]
+        controller.consume_token_bytes(token_bytes)
+        readable_chunk = utf8_decoder.decode(token_bytes)
 
-              mask = np.full_like(logits, -float('inf'))
-              mask[authorized_tokens_ids] = 0
-              filtered_logits = logits + mask
-              # debug_decoded_candidates(matcher.state_label, authorized_tokens_ids, logits, filtered_logits, model)
-
-              known_ids = set(tokenid_to_bytes.keys())
-              top_global_ids = [int(t_id) for t_id in np.argsort(logits)[::-1] if int(t_id) in known_ids][:10]
-              sorted_global_ids = np.argsort(logits)[::-1]
-              top_tokens_data = []
-              for t_id in top_global_ids:
-                  rank = int(np.where(sorted_global_ids == t_id)[0][0]) + 1
-                  disp_token_bytes = tokenid_to_bytes[t_id]
-                  try:
-                    disp_readable = disp_token_bytes.decode("utf-8", errors="replace")
-                  except Exception:
-                    disp_readable = repr(disp_token_bytes)
-                  top_tokens_data.append({
-                      'token': disp_readable,
-                      'logit': float(logits[t_id]),
-                      'filtered': float(filtered_logits[t_id]),
-                      'rank': rank
-                  })
-
-              next_token_id = int(np.argmax(filtered_logits))
-
-              actual_rank = int(np.where(sorted_global_ids == next_token_id)[0][0]) + 1
-              selected_ranks.append(actual_rank)
-              avg_rank = sum(selected_ranks) / len(selected_ranks)
-
-              input_ids.append(next_token_id)
-              token_bytes = tokenid_to_bytes[next_token_id]
-              matcher.consume_token_bytes(token_bytes)
-              readable_chunk = utf8_decoder.decode(token_bytes)
-              old_generated = generated
-              generated += readable_chunk
-
-              # debug_automaton_state(matcher)
-              # debug_stack(matcher)
-              # debug_prompt(generated)
-
-              live.update(
-                  dashboard.update(
-                      current_stage=matcher.state._name_,
-                      current_stage_label=matcher.state_label,
-                      active_pipeline=getattr(matcher, "pipeline", []),
-                      top_tokens=top_tokens_data,
-                      loops=loops,
-                      rejected_pct=rejected_pct,
-                      top1_rejected=top1_rejected_count,
-                      avg_rank=avg_rank,
-                      generated_text=_get_dashboard_generated(old_generated),
-                      generated_added_text=readable_chunk,
-                      step_hint="[n]ext [c]ontinue [j]ump steps [q]uit",
-                      logs=list(get_dashboard_handler().records),
-                  )
-              )
-              live.refresh()
-              step_ctrl.wait()
-              if step_ctrl.should_quit:
-                break
-    except KeyboardInterrupt:
-        live.stop()
-        raise
+        if is_debug:
+            stat_loops += 1
+            dec_state = _update_metrics(
+                logits=logits,
+                authorized_tokens_ids=authorized_tokens_ids,
+                filtered_logits=filtered_logits,
+                generated=generated,
+                readable_chunk=readable_chunk,
+                next_token_id=next_token_id,
+                tokenid_to_bytes=tokenid_to_bytes,
+                stat_loops=stat_loops,
+                stat_top1_rejected_count=stat_top1_rejected_count,
+                stat_selected_ranks=stat_selected_ranks,
+                controller=controller
+            )
+            stat_selected_ranks = dec_state.selected_ranks
+            stat_top1_rejected_count = dec_state.stat_top1_rejected_count
+            if on_step:
+                on_step(dec_state, controller)
+        generated += readable_chunk
 
     return _output_generated_json(generated)
