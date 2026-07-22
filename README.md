@@ -7,9 +7,16 @@ This project aims at implementing following SLM optimizations :
 - __function calling__ : translating natural language request into a function call
 - __constrained decoding__ to ensure generated output follows required format (here JSON)
 
+## Tools used in this project
+
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Qwen](https://img.shields.io/badge/Qwen-6950EF?style=for-the-badge&logo=qwen&logoColor=white)
+![Pydantic](https://img.shields.io/badge/pydantic-%23E92063.svg?style=for-the-badge&logo=pydantic&logoColor=white)
+![Rich](https://img.shields.io/badge/Rich-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
+
 # Progress
 
-```md
 - [x] validate input and output
 - [x] Pydantic schemas
 - [x] extract vocabulary
@@ -17,26 +24,26 @@ This project aims at implementing following SLM optimizations :
 - [x] constraints automata
 - [x] generation loop by token and byte evaluation
 
-- [-] tests
+- [x] tests
   - [x] accuracy > 95%
-  - [-] performance < 5 mn for 10 provided inputs 
-  - [-] robustness (files permissions, )
+  - [x] performance < 5 mn for 10 provided inputs 
+  - [x] robustness : extra tests + manual test for files permissions
 
-- [-] debugging and observability
+- [x] debugging and observability
   - [x] DEBUG mode showing top-k best tokens and masking
-  - [-] improved vizualisation : overall progress and stats
+  - [x] improved vizualisation : overall progress and stats
 
-```
 
 # Algorithm explanation
 
-1. __GET__ _logits_
-2. __GET__ _current state_
-3. __FOR EACH__ token in _logits_
-4.   __IF__ token is invalid for schema and _current state_
-5.   __THEN__ set its logit to _negative infinity_
-6.   __UPDATE__ _best token_
-7. __RETURN__ _best token_
+1. __GET__ _logits_ from model
+2. __FOR EACH__ token in _logits_ :
+   1.   DECODE token id to raw bytes
+   2.   __IF__ token is invalid for current state (or potentially next state) SET its logit to _negative infinity_
+   3.   __UPDATE__ _best token_
+3. __RETURN__ _best token_ and CONSUME it
+4. __UPDATE__ state
+5.  __UPDATE__ generated text and update prompt
 
 
 # Design decisions
@@ -56,57 +63,89 @@ generated = "-3.0"
 number_rgx.match(generated)
 ```
 
-- Pros : 
-  - accuracy
-  - performance : an eval through DFA occurs in linear complexity (O(n))
-  - relatively easy to maintain
-- Cons : 
-  - less adapted to nested structures (JSON, XML, code)
+- __Pros__ : 
+  - _performance_ : an eval through deterministic finite automaton occurs in linear complexity (O(n))
+- __Cons__ : 
+  - _flexibility_ : less adapted to nested structures (JSON, XML, code)
 
  __context free grammar__
 
-- Pros : 
-  - better suited than regex (and even state machine) for complex syntax, like nested structures.
-- Cons : 
-  - algorithmic complexity, depending on the chosen algorithm
+- ___Pros__ : 
+  - _accuracy and performance_ : better suited than regex (and even state machine) for complex syntax, like nested structures.
+- ___Cons__ : 
+  - _complexity_ : depending on the chosen algorithm
 
 __state machine__ (chosen option)
 
-- Pros : 
-  - accuracy : 
-  - performance when manually appending text
-- Cons : 
-  - flexibility : requires a big refactor when schemas change
-  - requires rigor when triggering state change
+- __Pros__ : 
+  - _performance_ : we can force part of the output when it is static
+- __Cons__ : 
+  - _maintenance_ : requires a big refactor when schemas change
+  - _complexity_ : requires rigor when triggering state change (especially with dynamic transitions or tokens overlapping state boundaries)
+
+
+## _How to delimit states boundaries ?_
+
+Current state delimitation mirrors big chunks of expected JSON structure : OBJECT KEY, PARAM KEY, PARAM VALUE, ...
+
+More specific states could have been added for careful management of transitions (ie COMMA). 
+But the model was able to generate relevant tokens by itself most of the time, and we could simply dynamically update a state matcher instead of defining a new state (i.e. PARAM KEY matcher would expect a leading comma from the second parameter on)
+
+## _Which global approach for detecting transitions ?_
+
+Three kinds of matchers were defined and associated to each state : static (when only one target value is possible), choices (when multiple known in advance target values are possible) and value (when we check only that type coherence is maintained). Those matchers are stored in a stack (more precisely a list in python) and can be dynamically added (according to the numbers of params required by the function). Those matcher implement a common interface with `evaluate()`, `is_complete()`, and `consume()` methods, and manage the state buffer.
+
+## _What should be granularity level of checks ?_
+
+__byte level__ (first attempt)
+
+- __Pros__ : _complexity_ : state change is easier to manage 
+- __Cons__ : _performance_ : more iterations
+
+__token level__ (chosen option)
+
+- __Pros__ : _performance_ 
+- __Cons__ : _complexity_ : cf. down overlapping token management
+
+## _How to manage tokens overlapping state boundaries ?_
+
+__reject tokens overlapping current and next state__
+
+Ex : should we accept token `"a": 1` overlapping current state PARAM_KEY and next state PARAM_VAL
+
+- __Pros__ : _complexity and maintenance_
+- __Cons__ : _performance_, _fragility_ : risk of running short of tokens
+
+__accept tokens overlapping state__
+
+- __Pros__ : _performance_ : this is handled through greedy evaluation of next state (a lookahead on the next state for ValueMatcher) and storing leftover part as buffer for next state.
+- __Cons__ : 
+
 
 ## _How to store the score of the next token ?_
 
 __in place logit modification__
 
-- Pros: 
-  - easy to write
-- Cons: 
-  - easier to debug
+- __Pros__ : easy to write
+- __Cons__ : harder to debug
 
-__boolean mask__
+__boolean mask__ (chosen option)
 
-- Pros : performance (with numpy)
+- __Pros__ : performance (with numpy)
 
-# Possible extensions
+# Known limitations
 
-- context-free grammars : BNF
-- Trie : optimal data structure to identify valid token ids
-- multi-model compatibility
-- recoding the tokenizer
-- performance optimization with caching and or batching
+- number evaluation goes with integer only (accepting `.` was making transitions more complicated)
+- when the prompt is empty or ambiguous, program does not provide a clear error message
+- no safeguards to prevent inacurrate parameters. For instance long numbers are not always reused as such in parameters. Ex : 9 x 10^18 reused as 9 x 10^19
 
 # Performance analysis
 
-| Criteria | Treshold | All vocabulary | Vocabulary filter |
-| --- | ---- | ----------------- |----------------- |
-| JSON validity | 100% | | |
-| execution speed | < 300 s | 495 | |
-| accuracy | > 90% | 100 | |
+| Criteria | Treshold | All vocabulary |
+| --- | ---- | ----------------- |
+| JSON validity | 100% | 100% |
+| execution speed | < 300 s | 202 |
+| accuracy | > 90% | 100 | 100% |
 
 
 # Challenges faced
@@ -115,17 +154,27 @@ __boolean mask__
  
 __Challenge__ : Detecting transitions in state machine relies on string comparison. However, BPE (byte pair encoding) tokenizers encoding does not always match UTF-8 (cf. supra). This can be a source of complexity in the code (when relating the token ID - which the state machine should exclusively operate on - with those two kinds of encoding : UTF-8 strings, BPE bytes), as well as latency (when converting on the fly).
 
-__Mitigation__ : Building dictionaries once and for all. Tradeoff : Some latency on initialization
+__Mitigation__ : Building dictionaries once and for all. Tradeoff : _performance_ : some latency on initialization
+
+## Code architecture and separation of concern
+
+__Challenge__ : Patching for edge case can lead to adding layers of logic and spreading in matchers and/or at different states (evaluation - token consumption)
+
+__Mitigation__ : Trying to have state redirection logic centralized in `AutomatonController` and having matchers implement a common interface.
 
 ## Minute evaluation of state transition
 
-__Challenge__ : 
-- Due to BPE encoding, a token can cover two states. For instance, on `EXPECT_FUN_NAME` state, when evaluating token `my_fun", parameters:"` : `my_fun"` could cover the end of function name and `, parameters:` would already cover next state. We should be able to either refuse it for a smaller token covering only current state (with the risk of slowing down generation or even worth running out of acceptable tokens), or accepting it but advancing the state adequately.
+It is one of the key issues of the project (when relying on an automata). Either validation is too laxist (leading to non valid json or inaccurate data), either it is too strict (leading to blocking state)
+
+__Challenge examples__ : 
 - When the generated token is `\\` it interferes with quote counting (necessary to validate that a proper string has been generated)
+- Some minor issues (such as generating two consecutive spaces after keys) were tolerable as it does not hinder json parsing
 
 __Mitigation__ : 
+- visual debugging
 - first attempt by evaluating token at byte level. Tradeoff : Performance was below expected levels
-- second attempt by rebuilding a state machine around a controller class and various kinds of Matcher. Tokens are examined for potential cutting points.
+- then token evaluation accepting overlapping states (cf. supra)
+- then refactoring by rebuilding a state machine around a controller class and various kinds of Matcher (cf. supra)
 
 ## Balancing accuracy and speed
 
@@ -137,14 +186,16 @@ __Mitigation__ :
 
 ## Grokking the theory
 
-__Challenge__ : It took some time before distinguishing the big picture among all the new concepts introduced by the subject. 
-
+It took some time before distinguishing the big picture among all the new concepts introduced by the subject.
+Little by little, the underlying concepts were explored, although not many
 
 # Testing strategy
 
 ## Improving debugging
 
-`rich` library proved useful to build a table of logits (proposed and filtered) that could be printed on DEBUG mode.
+`rich` library proved useful to build a table of logits (proposed and filtered) and a dashboard that can run in a step by step mode.
+
+![debugging dashboard](demo_cmb.gif)
 
 ## Integration tests for provided inputs
 
@@ -158,17 +209,27 @@ To be done (`utils/convert`)
 
 Partially done for missing files, file permissions. Could be converted to unit test.
 
+# Possible extensions
+
+- context-free grammars : BNF
+- Trie : optimal data structure to identify valid token ids
+- multi-model compatibility
+- recoding the tokenizer
+- performance optimization with caching and or batching
+
+
 # Resources
 
 | Url | Kind | Note              |
 | --- | ---- | ----------------- |
-|     |      |                   |
 |[Andrew Docherty - Controlling your LLM](https://medium.com/@docherty/controlling-your-llm-deep-dive-into-constrained-generation-1e561c736a20)|🗞️ article|                   |
 |[Aidan Cooper - A Guide to Structured Generation Using Constrained Decoding](https://www.aidancooper.co.uk/constrained-decoding/)|🗞️ article |3 forms (regex, code, hybrid) + pitfalls |
+|[Structured output from LLMs](https://www.youtube.com/watch?v=xpvFinvqRCA)|🎬 video | 17 mn |
 |[Argparse doc](https://docs.python.org/3/library/argparse.html) | 📔 doc | module to parse arguments |
 |[Pydantic doc](https://pydantic.dev/docs/validation/latest/concepts/models/)|📔 doc|Models used to validate input|
-|[Qwen 0.6B on HF](https://huggingface.co/Qwen/Qwen3-0.6B)|      |                   |
-|[Qwen 0.6B on APXML](https://apxml.com/models/qwen3-0-6b)|      |                   |
+|[Rich doc](https://rich.readthedocs.io/en/latest/index.html)|📔 doc|Styling console output|
+|[Qwen 0.6B on HF](https://huggingface.co/Qwen/Qwen3-0.6B)| 📔 doc |                   |
+|[Qwen 0.6B on APXML](https://apxml.com/models/qwen3-0-6b)| 📔 doc |                   |
 |[BPE Wikipedia](https://en.wikipedia.org/wiki/Byte-pair_encoding)|📙 wikipedia article|                   |
 
 ## Libraries usage
@@ -205,7 +266,8 @@ Enrich display and logs
 
 - `logging.RichHandler` can be integrated into `logging` module. Replace raw text with colored lines + file and line number
 - `table.Table` to dynamically generate table
-- `print` as an overload to native method 
+- `print` as an overload to native method
+- `Layout`, `Text`, .. for the dashboard
 
 ## AI Usage
 
@@ -219,14 +281,21 @@ Enrich display and logs
 
 # Example usage
 
-```
-# make install
+```bash
+# installing dependencies
+make install
 
-# make run
+# running program
+make run
 
-# make test
+# running tests
+make test
 
-# make lint
+# format linting and static analysis
+make lint
+
+# fixing format
+make format
 ```
 
 # Concepts and Glossary
