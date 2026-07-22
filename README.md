@@ -52,30 +52,19 @@ This project aims at implementing following SLM optimizations :
 
 __regex pattern__ 
 
-- Implementation : A regex represent the desired output schema
-
-Example:
-```python
-import regex
-number_rgx = regex.compile(r"-?[0-9+](.[0-9+])?$")
-# test with
-generated = "-3.0"
-number_rgx.match(generated)
-```
-
 - __Pros__ : 
   - _performance_ : an eval through deterministic finite automaton occurs in linear complexity (O(n))
 - __Cons__ : 
   - _flexibility_ : less adapted to nested structures (JSON, XML, code)
 
- __context free grammar__
+__context free grammar__
 
 - ___Pros__ : 
   - _accuracy and performance_ : better suited than regex (and even state machine) for complex syntax, like nested structures.
 - ___Cons__ : 
   - _complexity_ : depending on the chosen algorithm
 
-__state machine__ (chosen option)
+__finite state machine__ (chosen option)
 
 - __Pros__ : 
   - _performance_ : we can force part of the output when it is static
@@ -93,7 +82,7 @@ But the model was able to generate relevant tokens by itself most of the time, a
 
 ## _Which global approach for detecting transitions ?_
 
-Three kinds of matchers were defined and associated to each state : static (when only one target value is possible), choices (when multiple known in advance target values are possible) and value (when we check only that type coherence is maintained). Those matchers are stored in a stack (more precisely a list in python) and can be dynamically added (according to the numbers of params required by the function). Those matcher implement a common interface with `evaluate()`, `is_complete()`, and `consume()` methods, and manage the state buffer.
+Three kinds of matchers were defined and associated to each state : static (when only one target value is possible), choices (when multiple known in advance target values are possible) and value (when we check only that type coherence is maintained). Those matchers are stored in a stack (more precisely a list in python) and can be dynamically added (according to the numbers of params required by the function). Those matcher implement a common interface with `evaluate()`, `is_complete()`, `consume()` and `get_leftover()` methods, and manage the state buffer.
 
 ## _What should be granularity level of checks ?_
 
@@ -164,7 +153,7 @@ __Mitigation__ : Trying to have state redirection logic centralized in `Automato
 
 ## Minute evaluation of state transition
 
-It is one of the key issues of the project (when relying on an automata). Either validation is too laxist (leading to non valid json or inaccurate data), either it is too strict (leading to blocking state)
+It is one of the key issues of the project (when relying on an automaton). Either validation is too laxist (leading to non valid json or inaccurate data), either it is too strict (leading to blocking state)
 
 __Challenge examples__ : 
 - When the generated token is `\\` it interferes with quote counting (necessary to validate that a proper string has been generated)
@@ -224,13 +213,16 @@ Partially done for missing files, file permissions. Could be converted to unit t
 | --- | ---- | ----------------- |
 |[Andrew Docherty - Controlling your LLM](https://medium.com/@docherty/controlling-your-llm-deep-dive-into-constrained-generation-1e561c736a20)|🗞️ article|                   |
 |[Aidan Cooper - A Guide to Structured Generation Using Constrained Decoding](https://www.aidancooper.co.uk/constrained-decoding/)|🗞️ article |3 forms (regex, code, hybrid) + pitfalls |
-|[Structured output from LLMs](https://www.youtube.com/watch?v=xpvFinvqRCA)|🎬 video | 17 mn |
+|[Willard & Louf- Efficient guided generation for LLM](https://arxiv.org/abs/2307.09702)|🗞️ article |2023 publication |
+|[Structured output from LLMs](https://www.youtube.com/watch?v=xpvFinvqRCA)|🎬 video | 17 mn. Good summary |
 |[Argparse doc](https://docs.python.org/3/library/argparse.html) | 📔 doc | module to parse arguments |
 |[Pydantic doc](https://pydantic.dev/docs/validation/latest/concepts/models/)|📔 doc|Models used to validate input|
 |[Rich doc](https://rich.readthedocs.io/en/latest/index.html)|📔 doc|Styling console output|
 |[Qwen 0.6B on HF](https://huggingface.co/Qwen/Qwen3-0.6B)| 📔 doc |                   |
 |[Qwen 0.6B on APXML](https://apxml.com/models/qwen3-0-6b)| 📔 doc |                   |
-|[BPE Wikipedia](https://en.wikipedia.org/wiki/Byte-pair_encoding)|📙 wikipedia article|                   |
+|[BPE](https://en.wikipedia.org/wiki/Byte-pair_encoding)|📙 wikipedia article|                   |
+|[Automata theory](https://en.wikipedia.org/wiki/Automata_theory)|📙 wikipedia article|                   |
+|[Chomsky hierarchy](https://devopedia.org/chomsky-hierarchy)|📙 devopedia article| Good to know the association between grammars and automaya |
 
 ## Libraries usage
 
@@ -307,20 +299,27 @@ make format
 |tensor|multidimensional container for numerical data. Can represent scalars (0 dimension), vectors (1D) and matrices (2D) to higher dimensions (N-D).|In a model, they store weights, input and other layers such as logits during inference|
 |BPE (Byte pair encoding) tokenizer|Subword tokenization algorithm that merges most frequent pairs of adjacent characters or bytes into new tokens until a |Byte-level BPE initiates the process from 256 possible raw bytes values to ensure that any arbitrary binary flow can be tokenized without generating an unknown token error|
 |ChatML|markup language developed by OpenAI and used in other models (Qwen) to structure a conversation|`<|im_start|>` indicates a new message and followed by sender role (`system`, `user`, `assistant`)|
-|FSM - Finite state machine|moel consisting of a finite number of states, transitions and actions|In constrained decoding, it blocks invalid transitions|
-|Trie or prefix tree|a search tree data structure storing an associative array where keys are equences|A trie allows to identify which token ID matches a valid string prefix allowed by the state machine|
+|automaton|computing model following a sequence of operations|we are using a specific kind of automaton here : Finite State Automaton (FSA)|
+|Trie or prefix tree|a search tree data structure storing an associative array where keys are equences|A trie allows to identify which token ID matches a valid string prefix allowed by the state machine.|
+|Interleaved generation|pattern where the generation loop switches between model-generated and forced text||
+|Prompt control|Manipulating prompt context, logit distribution of sampling loop parameters during generation||
 
 
-## State machines
+## Grammars and State machines
 
-There are two kinds of state machines or automata:
+![Chomsky hierarchy](chomsky_hierarchy.png)
 
-- __finite state machines__ rely on strict linear transitions to validate _predictable_ patterns (i.e. known function signatures). They keep no memory of states before and beyond the current one.
-- __push down automata__ work on LIFO basis. They can validate a __context-free grammar__.
+Chomsky hierarchy distinguished in 1956 4 levels of language, according to the restriction of their grammar. Each one can be parsed by a kind of state machine or automaton (cf. picture). 
 
-During constraint decoding, state machines evaluate tokens or bytes against authorized transition from the current state. Sometimes, the transition is linear (ex: `EXPECT_PARAM_KEY` -> `EXPECT_PARAM_VALUE`). Sometimes, there are multiple possible states to take into account (ex: `EXPECT_COMMA_OR_END` -> `EXPECT_PARAM_KEY` OR `FINISH`)
+- _regular grammar_ is the most restrictive. It can be parsed by a __deterministic finite state automaton (DFA)__ relying on linear transitions to validate predictable patterns. 
+- context-free grammar enable more abstraction. It can be parsed by a __push-down automaton (PDA)__ based on a stack. Transition is guided not only by current symbol, but also by the one at the top of the heap. It can handle infinite nested structures.
+- context-sensitive grammar : closest to programming and natural languages
+- recursively enumerable grammar
 
-## CFG - Context free grammar
+Let's focus on the first two. Why ? Because on one side JSON is a context-free grammar (requiring a stack for potentially nested objects : here function params), but on the other, as we know the skeleton of expected output, and once we managed dynamically nested objects, we can rely on elements of a finite automaton (forced output, matchers).
+
+
+### CFG - Context free grammar
 
 CFG describe a syntaxis using relation between symbols. Some symbols are _terminal_ and represent the basic units (eg. digit or even bytes). Some are _non-terminal_ and are built upon them (eg float consisting possibly of a sequence of digits, dot, digits). cf. CFG in [JSON RFC 4627](https://www.rfc-editor.org/info/rfc4627/#section-2.2).
 
@@ -371,12 +370,6 @@ A|B|C : altermatives
 _railroad diagram_ representing this CFG
 
 __derivation__ refers to the replacement pattern of non-terminal symbols when constructing a valid sentence.
-__determinist__ grammars can be parsed by an automaton without any ambiguity. 
-
-DFA - Deterministic Finite Automaton : a symbol can lead to one and only one transition
-NFA - Non deterministic Finite Automaton : a symbol can lead to many simultaneous transitions (ex: if the order of named parameter is not deemed important)
-PDA - Pushdown Automaton : based on a heap. transition is guided not only by current symbol, but also by the one at the top of the heap. Can handle infinite nested structures.
-
 
 ## Byte-pair encoding tokenization
 
@@ -417,10 +410,17 @@ Pairs are iteratively merged (most frequent are merged first), till the vocabula
 
 _most of those tools were not authorized by the subject. Therefore it is just an overview for the sake of knowing current usage in the professional sphere_
 
-- llama.cpp : supports CFG decoding
-- SGLang : supports regex contraints, control primitives (`select`, `gen` 
-- vLLM : cf [doc](https://vllm.ai/blog/2025-01-14-struct-decode-intro)
+### High-level : frameworks and model providers API
+- Many models providers API such as OpenAI accept Pydantic models argument to constrain output
+- [Outlines](https://github.com/dottxt-ai/outlines) : Python library for structures output : converts JSON schema, Pydantic models, Regex into DFA or PDA
+- [Guidance](https://github.com/guidance-ai/guidance) : Python library by Mocrosoft
 
-### other tools
+### Low-level : Inference engines
 
-- DSPy : optimizes prompts and examples to get closer to expected output
+- [llama.cpp](https://llama-cpp.com/) : supports CFG decoding via GBNF
+- [SGLang](https://github.com/sgl-project/sglang) : supports regex contraints, control primitives (`select`, `gen` 
+- [vLLM](https://vllm.ai/) : integrates structured decoding through third party libs(Outline, Guidance) in continuous batching engine. cf [doc](https://vllm.ai/blog/2025-01-14-struct-decode-intro)
+
+### Complementary approach
+
+- [DSPy](https://dspy.ai/) : optimizes prompts and examples to get closer to expected output
