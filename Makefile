@@ -10,6 +10,9 @@ install:
 run:
 	uv run python -m src
 
+run-robust:
+	uv run python -m src -input 'data/input/function_calling_tests_robustness.json'
+
 debug:
 	uv run python -m pdb -m src
 
@@ -35,6 +38,6 @@ lint:
 
 lint-strict:
 	uv run flake8 .
-	uv run ypy . --strict
+	uv run mypy . --strict
 
 .PHONY: all install run debug clean lint lint-strict format

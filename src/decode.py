@@ -25,7 +25,8 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
 
     system_prompt = f"You are a function calling router. \
       Available functions:\n{available_fun}\n. \
-      Return a JSON object with the name of the function that matches the user request."
+      Return a JSON object with the name of the function that matches the user request.\
+      If the query is empty or ambiguous return flag values : -1 for number and 'ERROR' for strings."
     chat_prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         f"<|im_start|>user\n{current_prompt}<|im_end|>\n"

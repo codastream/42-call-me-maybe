@@ -32,10 +32,10 @@ print("root level =", logging.getLogger().getEffectiveLevel(), file=sys.stderr)
 # =================
 
 parser = argparse.ArgumentParser(description="Function calling")
-parser.add_argument('-f', '--functions_definition', type=str, help='function definition file',
+parser.add_argument('-functions_definition', type=str, help='function definition file',
                     default='data/input/functions_definition.json')
-parser.add_argument('-i', '--input', type=str, help='input file', default='data/input/function_calling_tests.json')
-parser.add_argument('-o', '--output', type=str, help='output file', default='data/output/function_calls.json')
+parser.add_argument('-input', type=str, help='input file', default='data/input/function_calling_tests.json')
+parser.add_argument('-output', type=str, help='output file', default='data/output/function_calls.json')
 
 args = parser.parse_args()
 
@@ -89,7 +89,7 @@ available_fun = "\n".join([f"- {f.name}: {f.description}" for f in fun_defs])
 
 total_start = time.time()
 
-for test in tests[7:8]:
+for test in tests[:]:
 
     try:
         log.info(f"processing prompt: {test.prompt}")
