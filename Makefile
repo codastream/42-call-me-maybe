@@ -10,8 +10,8 @@ install:
 run:
 	uv run python -m src
 
-run-robust:
-	uv run python -m src -input 'data/input/function_calling_tests_robustness.json'
+run-steps:
+	DEBUG=True uv run python -m src
 
 debug:
 	uv run python -m pdb -m src
@@ -24,6 +24,9 @@ test-v:
 
 test-debug:
 	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py --log-level DEBUG
+
+test-robust:
+	uv run python -m src -input 'data/input/function_calling_tests_robustness.json'
 
 clean:
 	rm -rf __pycache__ .mypy_cache
@@ -40,4 +43,4 @@ lint-strict:
 	uv run flake8 .
 	uv run python -m mypy src --explicit-package-bases --strict
 
-.PHONY: all install run debug clean lint lint-strict format
+.PHONY: all install run run-steps debug clean lint lint-strict format test test-v test-debug test-robust

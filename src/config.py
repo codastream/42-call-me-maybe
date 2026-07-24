@@ -24,7 +24,7 @@ _dashboard_handler: DashboardLogHandler | None = None
 _configured = False
 
 
-def setup_logging(level: int = logging.DEBUG) -> None:
+def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging"""
     global _console_handler, _dashboard_handler, _configured
     if _configured:
