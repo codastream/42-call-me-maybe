@@ -102,11 +102,9 @@ class ChoiceMatcher(TokenMatcher):
 class ValueMatcher(TokenMatcher):
     """Check that the buffer maintains type consistency"""
 
-    _PARTIAL_NUM_RE = re.compile(r'^[-+]?[0-9]*?$')
-    _FULL_NUM_RE = re.compile(r'^[-+]?[0-9]+$')
-    _EXTRACT_NUM_RE = re.compile(r'^[-+]?[0-9]+')
-    # _PARTIAL_NUM_RE   = re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
-    # _FULL_NUM_RE      = re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$')
+    _PARTIAL_NUM_RE = re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
+    _FULL_NUM_RE = re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$')
+    _EXTRACT_NUM_RE = re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?')
 
     @staticmethod
     def _find_string_end(s: str) -> int:

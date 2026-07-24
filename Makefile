@@ -26,10 +26,10 @@ test-debug:
 	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py --log-level DEBUG
 
 test-robust:
-	uv run python -m src -input 'data/input/function_calling_tests_robustness.json'
+	uv run python -m src --input 'data/input/function_calling_tests_robustness.json'
 
 clean:
-	rm -rf __pycache__ .mypy_cache
+	find . -name '__pycache__' -exec rm -rf {} +
 
 format:
 	$(BIN)/autoflake --in-place --remove-all-unused-imports --remove-unused-variables --recursive .

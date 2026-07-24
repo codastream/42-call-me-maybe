@@ -124,7 +124,7 @@ __boolean mask__ (chosen option)
 
 # Known limitations
 
-- number evaluation goes with integer only (accepting `.` was making transitions more complicated)
+- no handling of null type
 - when the prompt is empty or ambiguous, program does not provide a clear error message
 - no safeguards to prevent inacurrate parameters. For instance long numbers are not always reused as such in parameters. Ex : 9 x 10^18 reused as 9 x 10^19
 
@@ -134,7 +134,7 @@ __boolean mask__ (chosen option)
 | --- | ---- | ----------------- |
 | JSON validity | 100% | 100% |
 | execution speed | < 300 s | 202 |
-| accuracy | > 90% | 100 | 100% |
+| accuracy | > 90% | 100% |
 
 
 # Challenges faced

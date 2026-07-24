@@ -13,5 +13,8 @@
   },
   {
     "prompt": "What is the sum of 1"
+  },
+  {
+    "prompt": "Replace all numbers in \"Hello 3 I'm 2060 years old\" with 🤗"
   }
 ]

@@ -49,6 +49,7 @@ def _has_correct_extension(file_path: str, expected_ext: str) -> bool:
         return False
     return True
 
+
 # ==============
 # MAIN METHODS
 # ==============
@@ -64,24 +65,30 @@ def check_args_paths(args: argparse.Namespace) -> Tuple[str, str, str]:
         raise ValueError("Some arguments are missing or empty")
 
     # check definitions
-    defs_path = args.functions_definition.strip()
-    is_def_valid = _check_file_permissions(defs_path, "r") and _has_correct_extension(defs_path, ".json")
+    defs_path_str = args.functions_definition.strip()
+    is_def_valid = _check_file_permissions(defs_path_str, "r") and _has_correct_extension(defs_path_str, ".json")
     if not is_def_valid:
-        raise ValueError(f"Invalid function definition file: {defs_path}")
+        raise ValueError(f"Invalid function definition file: {defs_path_str}")
 
     # check input file
-    input_path = args.input.strip()
-    is_in_valid = _check_file_permissions(input_path, "r") and _has_correct_extension(input_path, ".json")
+    input_path_str = args.input.strip()
+    is_in_valid = _check_file_permissions(input_path_str, "r") and _has_correct_extension(input_path_str, ".json")
     if not is_in_valid:
-        raise ValueError(f"Invalid input file: {input_path}")
+        raise ValueError(f"Invalid input file: {input_path_str}")
 
     # check output file
-    output_path = args.output.strip()
-    is_out_valid = _check_file_permissions(output_path, "w")
-    if not is_out_valid:
+    output_path_str = args.output.strip()
+    output_path = Path(output_path_str)
+    if output_path.is_dir():
+        raise ValueError(f"Output path is a directory: {output_path}")
+    output_dir = output_path.parent
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+    has_write_perm = _check_file_permissions(args.output.strip(), "w")
+    if not has_write_perm:
         raise ValueError(f"Output path has no write permission: {output_path}")
 
-    return (defs_path, input_path, output_path)
+    return (defs_path_str, input_path_str, output_path_str)
 
 
 def check_format(path: str, adapter: TypeAdapter[T]) -> T:

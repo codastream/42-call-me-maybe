@@ -71,7 +71,7 @@ def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict
         dic_id_to_bytes, dic_id_to_print = extract_and_cache_vocabulary(vocab_file_path)
         log.info(f"Loaded {len(dic_id_to_bytes)} optimized tokens into cache maps.")
         return model, dic_id_to_bytes, dic_id_to_print
-    except (ValueError, Exception) as e:
+    except Exception as e:
         log.error(f"Error: {e}")
         sys.exit(1)
 
