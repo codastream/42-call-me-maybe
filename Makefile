@@ -17,13 +17,13 @@ debug:
 	uv run python -m pdb -m src
 
 test:
-	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py
+	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py
 
 test-v:
-	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py -v
+	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py -v
 
 test-debug:
-	$(PYTHONPATH_ENV) uv run python src/tests/test_decoding.py --log-level DEBUG
+	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py --log-level DEBUG
 
 test-robust:
 	uv run python -m src --input 'data/input/function_calling_tests_robustness.json'
