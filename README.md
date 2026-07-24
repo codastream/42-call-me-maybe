@@ -2,9 +2,9 @@ _This project has been created as part of the 42 curriculum by fpetit_
 
 # Description
 
-This project aims at implementing following SLM optimizations : 
+Small languages models (SLM) can achieve better performance under specific conditions. This project aims at implementing following optimizations : 
 
-- __function calling__ : translating natural language request into a function call
+- __function calling__ to turn a natural language request into a function call
 - __constrained decoding__ to ensure generated output follows required format (here JSON)
 
 ## Tools used in this project
@@ -273,6 +273,10 @@ Enrich display and logs
 
 # Example usage
 
+Prerequisites (from project page): 
+- installation of SDK
+- 
+
 ```bash
 # installing dependencies
 make install
@@ -412,8 +416,8 @@ _most of those tools were not authorized by the subject. Therefore it is just an
 
 ### High-level : frameworks and model providers API
 - Many models providers API such as OpenAI accept Pydantic models argument to constrain output
-- [Outlines](https://github.com/dottxt-ai/outlines) : Python library for structures output : converts JSON schema, Pydantic models, Regex into DFA or PDA
-- [Guidance](https://github.com/guidance-ai/guidance) : Python library by Mocrosoft
+- [Guidance](https://github.com/guidance-ai/guidance) : Python library by Microsoft
+- [Outlines](https://github.com/dottxt-ai/outlines) : Python library for structured output : converts JSON schema, Pydantic models, Regex into DFA or PDA
 
 ### Low-level : Inference engines
 
