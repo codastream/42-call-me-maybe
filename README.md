@@ -184,7 +184,7 @@ Little by little, the underlying concepts were explored, although not many
 
 `rich` library proved useful to build a table of logits (proposed and filtered) and a dashboard that can run in a step by step mode.
 
-![debugging dashboard](demo_cmb.gif)
+![debugging dashboard](assets/demo_cmb.gif)
 
 ## Integration tests for provided inputs
 
@@ -275,7 +275,7 @@ Enrich display and logs
 
 Prerequisites (from project page): 
 - installation of SDK
-- 
+- functions definitions and prompts in json format
 
 ```bash
 # installing dependencies
@@ -311,7 +311,7 @@ make format
 
 ## Grammars and State machines
 
-![Chomsky hierarchy](chomsky_hierarchy.png)
+![Chomsky hierarchy](assets/chomsky_hierarchy.png)
 
 Chomsky hierarchy distinguished in 1956 4 levels of language, according to the restriction of their grammar. Each one can be parsed by a kind of state machine or automaton (cf. picture). 
 
@@ -370,7 +370,7 @@ Extended Backus-Naur form
 A|B|C : altermatives
 ```
 
-![railroad diagram](data/railroad_bnf.png)
+![railroad diagram](assets/railroad_bnf.png)
 _railroad diagram_ representing this CFG
 
 __derivation__ refers to the replacement pattern of non-terminal symbols when constructing a valid sentence.

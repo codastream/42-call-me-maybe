@@ -1,6 +1,6 @@
 downloads/
 llm_sdk/
-data/
+data/output
 
 # Visual Studio Code
 tempCodeRunnerFile.py
