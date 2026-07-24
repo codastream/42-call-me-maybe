@@ -7,6 +7,8 @@ from llm_sdk import Small_LLM_Model
 from typing import Any
 
 from src.matcher import TokenMatcher
+from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
+
 
 IS_DEBUG = True
 PIPELINE_STAGES = ["FUN_NAME", "PARAM_PREFIX", "PARAM_KEY_OR_VAL", "CLOSE"]
@@ -41,7 +43,7 @@ def debug_prompt(generated: str) -> None:
         rprint(f"Generated: [bold green]{escape(generated[content_start_idx:])}[/bold green]")
 
 
-def debug_decoded_candidates(context: str, authorized_tokens: list[int], logits: npt.NDArray[np.int64],
+def debug_decoded_candidates(context: str, id_to_bytes: dict[int, bytes], logits: npt.NDArray[np.int64],
                              filtered_logits: npt.NDArray[np.int64], model: Small_LLM_Model) -> None:
     """Print first candidate tokens"""
 
@@ -51,7 +53,7 @@ def debug_decoded_candidates(context: str, authorized_tokens: list[int], logits:
     filtered_arr = np.array(filtered_logits).flatten()
     top_global_ids = np.argsort(logits_arr)[::-1][:5]
     vmax = logits_arr[top_global_ids[0]] if len(top_global_ids) > 0 else 0
-
+    custom_utf8_decoder = CustomUTF8Decoder()
     table = Table(
         title=f"Top tokens at step {context}",
         box=None,
@@ -67,7 +69,7 @@ def debug_decoded_candidates(context: str, authorized_tokens: list[int], logits:
     for t_id in top_global_ids:
 
         t_id = int(t_id)
-        t_str = model.decode([t_id])
+        t_str = custom_utf8_decoder.decode(id_to_bytes[t_id])
         t_str_rep = repr(t_str)[1:-1]
         logit_val = float(logits_arr[t_id])
         filtered_val = float(filtered_arr[t_id])

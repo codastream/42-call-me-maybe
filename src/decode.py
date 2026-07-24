@@ -1,6 +1,5 @@
 import time
 import json
-import codecs
 from typing import cast, Any, Callable
 
 from rich.live import Live
@@ -13,6 +12,7 @@ from src.matcher.AutomatonDef import AState
 from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
 from src.utils.DebugDashboard import DebugDashboard, DecodingStepState
 from src.utils.StepController import StepController
+from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
 from src.config import get_logger, get_dashboard_handler
 
 
@@ -32,7 +32,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
         f"<|im_start|>user\n{current_prompt}<|im_end|>\n"
         f"<|im_start|>assistant\n<think>\n\n</think>\n\n"
     )
-    escaped_prompt = json.dumps(current_prompt)[1:-1]
+    escaped_prompt = json.dumps(current_prompt, ensure_ascii=False)[1:-1]
     forced_prefix = f'{{"prompt": "{escaped_prompt}", "name": "'
     generated = chat_prompt + forced_prefix
     return generated
@@ -110,6 +110,21 @@ def execute_with_dashboard(model: Small_LLM_Model,
         )
 
 
+def _format_token_bytes(token_b: bytes) -> str:
+    """Format tokens for display with Rich"""
+    try:
+        decoded = token_b.decode("utf-8")
+        if decoded == " ":
+            return "␣ (space)"
+        elif decoded == "\n":
+            return "\\n (newline)"
+        elif decoded == "\t":
+            return "\\t (tab)"
+        return repr(decoded)[1:-1]
+    except UnicodeDecodeError:
+        return f"bytes: {token_b!r}"
+
+
 def _update_metrics(
     logits: npt.NDArray[np.int64],
     authorized_tokens_ids: list[int],
@@ -139,7 +154,7 @@ def _update_metrics(
         rank = int(np.where(sorted_global_ids == t_id)[0][0]) + 1
         disp_token_bytes = tokenid_to_bytes[t_id]
         try:
-            disp_readable = disp_token_bytes.decode("utf-8", errors="replace")
+            disp_readable = _format_token_bytes(disp_token_bytes)
         except Exception:
             disp_readable = repr(disp_token_bytes)
         top_tokens_data.append({
@@ -184,7 +199,7 @@ def execute_decoding(model: Small_LLM_Model,
 
     generated = _init_generated(available_fun, current_prompt)
     input_ids = model.encode(generated)[0].tolist()
-    utf8_decoder = codecs.getincrementaldecoder('utf-8')(errors='strict')
+    custom_utf8_decoder = CustomUTF8Decoder()
     start_time = time.time()
     stat_loops = 0
     stat_top1_rejected_count = 0
@@ -208,7 +223,9 @@ def execute_decoding(model: Small_LLM_Model,
         input_ids.append(next_token_id)
         token_bytes = tokenid_to_bytes[next_token_id]
         controller.consume_token_bytes(token_bytes)
-        readable_chunk = utf8_decoder.decode(token_bytes)
+        readable_chunk = custom_utf8_decoder.decode(token_bytes)
+        # readable_chunk = utf8_decoder.decode(token_bytes)
+        # readable_chunk = token_bytes.decode(errors="surrogateescape")
 
         if is_debug:
             stat_loops += 1
@@ -232,5 +249,6 @@ def execute_decoding(model: Small_LLM_Model,
                 if should_quit:
                     break
         generated += readable_chunk
-
+    extra = custom_utf8_decoder.flush()
+    log.debug(f"extra decoder bytes: {extra}")
     return _output_generated_json(generated)

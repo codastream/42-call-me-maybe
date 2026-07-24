@@ -126,7 +126,8 @@ __boolean mask__ (chosen option)
 
 - no handling of null type
 - when the prompt is empty or ambiguous, program does not provide a clear error message
-- no safeguards to prevent inacurrate parameters. For instance long numbers are not always reused as such in parameters. Ex : 9 x 10^18 reused as 9 x 10^19
+- non-latin parameters are sometimes passed with their english translation
+- no safeguards to prevent inacurrate parameters. For instance long numbers are not always reused as such in parameters. Ex : 9 x 10^18 reused as 9 x 10^19. Negative numbers are not reliably passed as arguments either.
 
 # Performance analysis
 
