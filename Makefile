@@ -17,7 +17,7 @@ debug:
 	uv run python -m pdb -m src
 
 test:
-	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py
+	$(PYTHONPATH_ENV) DEBUG=False uv run python tests/test_decoding.py
 
 test-v:
 	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py -v

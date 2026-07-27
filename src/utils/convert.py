@@ -1,5 +1,8 @@
 import json
+import re
 from typing import Tuple
+
+from src.models.TypeDef import TypeDef
 
 
 def _build_base_printable_mappings() -> Tuple[dict[int, str], dict[str, int]]:
@@ -36,7 +39,7 @@ BYTE_TO_PRINTABLE, PRINTABLE_TO_BYTE = _build_base_printable_mappings()
 def bytes_to_str(buf: bytes) -> str | None:
     """Return decoded bytes to UTF-8 string"""
     try:
-        return buf.decode('utf-8', errors='surrogateescape').strip()
+        return buf.decode('utf-8', errors='surrogateescape')
     except Exception:
         return None
 
@@ -45,7 +48,53 @@ def bytes_to_str(buf: bytes) -> str | None:
 # ==================
 
 
-def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes], dict[int, str]]:
+def _build_string_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
+    """Precompute acceptable token ids for type string"""
+    ids = []
+    for t_id, t_b in dic_id_to_bytes.items():
+        if t_b.startswith(b'"') or b'"' not in t_b:
+            ids.append(t_id)
+    return ids
+
+
+def _build_boolean_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
+    """Precompute acceptable token ids for type boolean"""
+    true_b, false_b = b"true", b"false"
+    ids = []
+    for t_id, t_b in dic_id_to_bytes.items():
+        s = bytes_to_str(t_b)
+        if s is None:
+            continue
+        if true_b.startswith(t_b) or false_b.startswith(t_b) or s in ("true", "false"):
+            ids.append(t_id)
+    return ids
+
+
+def _build_number_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
+    """Precompute acceptable token ids for type number"""
+    NUMBER_TOKEN_RE = re.compile(r'^[-+0-9.eE]+$')
+    ids = []
+    for t_id, t_b in dic_id_to_bytes.items():
+        s = bytes_to_str(t_b)
+        if s and NUMBER_TOKEN_RE.match(s):
+            ids.append(t_id)
+    return ids
+
+
+def build_value_buckets(dic_id_to_bytes: dict[int, bytes]) -> dict[TypeDef, list[int]]:
+    """Precompute lists of acceptable token ids according to expected type"""
+    number_bucket = _build_number_bucket(dic_id_to_bytes)
+    boolean_bucket = _build_boolean_bucket(dic_id_to_bytes)
+    string_bucket = _build_string_bucket(dic_id_to_bytes)
+
+    return {
+        TypeDef.NUMBER: number_bucket,
+        TypeDef.BOOLEAN: boolean_bucket,
+        TypeDef.STRING: string_bucket
+    }
+
+
+def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes], dict[int, str], dict[bytes, int]]:
     """Extract vocabulary
 
     Raises:
@@ -60,18 +109,20 @@ def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes]
     except Exception as e:
         raise Exception(f"Unexpected error while extracting vocabulary: {e}")
 
-    vocab_raw_bytes: dict[int, bytes] = {}
-    vocab_print: dict[int, str] = {}
+    dic_id_to_bytes: dict[int, bytes] = {}
+    dic_id_to_print: dict[int, str] = {}
+    dic_bytes_to_id: dict[bytes, int] = {}
     for token_str, token_id in raw_vocab.items():
         t_id = int(token_id)
         try:
             raw_bytes = bytes(PRINTABLE_TO_BYTE[char] for char in token_str)
         except KeyError:
             raw_bytes = token_str.encode("utf-8", errors="surrogateescape")
-        vocab_raw_bytes[t_id] = raw_bytes
-        vocab_print[t_id] = token_str
+        dic_id_to_bytes[t_id] = raw_bytes
+        dic_bytes_to_id[raw_bytes] = t_id
+        dic_id_to_print[t_id] = token_str
 
-    return vocab_raw_bytes, vocab_print
+    return dic_id_to_bytes, dic_id_to_print, dic_bytes_to_id
 
 
 def convert_token_str_to_bytes(token_str: str) -> bytes:

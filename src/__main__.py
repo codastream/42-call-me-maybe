@@ -1,16 +1,19 @@
-from llm_sdk import Small_LLM_Model
-from src.utils.convert import extract_and_cache_vocabulary
-from src.config import get_logger
-from src.checkers import check_args_paths, check_format
-from src.models import FunctionDefinition, TestDefinition
-from src.decode import execute_with_dashboard, execute_decoding
-from src.exceptions import DecodingException
+from src.utils.Trie import TrieNode
 from src.matcher import AutomatonController
+from src.exceptions import DecodingException
+from src.decode import execute_with_dashboard, execute_decoding
+from src.models import FunctionDefinition, TestDefinition
+from src.models.TypeDef import TypeDef
+from src.checkers import check_args_paths, check_format
+from src.config import get_logger
+from src.utils.convert import extract_and_cache_vocabulary, build_value_buckets
+from llm_sdk import Small_LLM_Model
 import argparse
 import json
 import sys
 import time
 import os
+import traceback
 
 from typing import Tuple, Any
 
@@ -58,7 +61,8 @@ def validate_schema(defs_path: str, input_path: str) -> Tuple[list[FunctionDefin
         sys.exit(1)
 
 
-def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict[int, str]]:
+def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict[bytes, int], dict[int, str],
+                                         TrieNode, dict[TypeDef, list[int]]]:
     """Initialize model and vocabulary maps"""
     log = get_logger()
     model = Small_LLM_Model(local_files_only=True)
@@ -66,18 +70,22 @@ def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict
 
     dic_id_to_bytes: dict[int, bytes] = {}
     dic_id_to_print: dict[int, str] = {}
+    dic_bytes_to_id: dict[bytes, int] = {}
 
     try:
-        dic_id_to_bytes, dic_id_to_print = extract_and_cache_vocabulary(vocab_file_path)
+        dic_id_to_bytes, dic_id_to_print, dic_bytes_to_id = extract_and_cache_vocabulary(vocab_file_path)
         log.info(f"Loaded {len(dic_id_to_bytes)} optimized tokens into cache maps.")
-        return model, dic_id_to_bytes, dic_id_to_print
+        root = TrieNode.build_vocab_trie(dic_id_to_bytes)
+        value_type_buckets = build_value_buckets(dic_id_to_bytes)
+        return model, dic_id_to_bytes, dic_bytes_to_id, dic_id_to_print, root, value_type_buckets
     except Exception as e:
         log.error(f"Error: {e}")
         sys.exit(1)
 
 
-def generate_results(fun_defs: list[FunctionDefinition], model: Small_LLM_Model,
-                     dic_id_to_bytes: dict[int, bytes]) -> list[dict[Any, Any]]:
+def generate_results(fun_defs: list[FunctionDefinition], tests: list[TestDefinition],  model: Small_LLM_Model,
+                     dic_id_to_bytes: dict[int, bytes], dic_bytes_to_id: dict[bytes, int],
+                     trie_root: TrieNode, value_buckets: dict[TypeDef, list[int]]) -> list[dict[Any, Any]]:
     """Decode and return json output"""
     log = get_logger()
     outputs = []
@@ -85,7 +93,7 @@ def generate_results(fun_defs: list[FunctionDefinition], model: Small_LLM_Model,
 
     total_start = time.time()
 
-    for test in tests[:]:
+    for test in tests[8:]:
         try:
             log.info(f"processing prompt: {test.prompt}")
             controller = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
@@ -94,8 +102,11 @@ def generate_results(fun_defs: list[FunctionDefinition], model: Small_LLM_Model,
                     model=model,
                     current_prompt=test.prompt,
                     tokenid_to_bytes=dic_id_to_bytes,
+                    tokenbytes_to_id=dic_bytes_to_id,
                     available_fun=available_fun,
                     controller=controller,
+                    trie_root=trie_root,
+                    value_buckets=value_buckets,
                     timeout=180,
                     is_debug=True
                 )
@@ -105,8 +116,11 @@ def generate_results(fun_defs: list[FunctionDefinition], model: Small_LLM_Model,
                     model=model,
                     current_prompt=test.prompt,
                     tokenid_to_bytes=dic_id_to_bytes,
+                    tokenbytes_to_id=dic_bytes_to_id,
                     available_fun=available_fun,
                     controller=controller,
+                    trie_root=trie_root,
+                    value_buckets=value_buckets,
                     timeout=180,
                     is_debug=False
                 )
@@ -116,8 +130,9 @@ def generate_results(fun_defs: list[FunctionDefinition], model: Small_LLM_Model,
         except KeyboardInterrupt as e:
             log.error(f"Decoding interrupted (Ctrl + C) : {e}")
             exit(1)
-        except Exception:
-            log.error("Unexpected error")
+        except Exception as e:
+            log.error(f"Unexpected error: {e}")
+            traceback.print_exc()
 
     total_finish = time.time()
     log.info(f"All inputs decoded within {total_finish - total_start:.2f}s")
@@ -138,6 +153,6 @@ def write_outputs(output_path: str, outputs: list[dict[Any, Any]]) -> None:
 if __name__ == "__main__":
     defs_path, input_path, output_path = validate_files()
     fun_defs, tests = validate_schema(defs_path, input_path)
-    model,  dic_id_to_bytes, dic_id_to_print = init_model_and_vocabulary()
-    outputs = generate_results(fun_defs, model, dic_id_to_bytes)
+    model,  dic_id_to_bytes, dic_bytes_to_id, dic_id_to_print, root, value_type_buckets = init_model_and_vocabulary()
+    outputs = generate_results(fun_defs, tests, model, dic_id_to_bytes, dic_bytes_to_id, root, value_type_buckets)
     write_outputs(output_path, outputs)

@@ -158,6 +158,7 @@ It is one of the key issues of the project (when relying on an automaton). Eithe
 
 __Challenge examples__ : 
 - When the generated token is `\\` it interferes with quote counting (necessary to validate that a proper string has been generated)
+- The tokenizer can generate `"string"` : but it was not clear whether we should accept `"` in the ValueMatcher
 - Some minor issues (such as generating two consecutive spaces after keys) were tolerable as it does not hinder json parsing
 
 __Mitigation__ : 

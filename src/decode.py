@@ -1,5 +1,6 @@
 import time
 import json
+import traceback
 from typing import cast, Any, Callable
 
 from rich.live import Live
@@ -7,13 +8,15 @@ import numpy as np
 import numpy.typing as npt
 from llm_sdk import Small_LLM_Model
 
-from src.matcher import AutomatonController
+from src.matcher.AutomatonController import AutomatonController
 from src.matcher.AutomatonDef import AState
 from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
 from src.utils.DebugDashboard import DebugDashboard, DecodingStepState
 from src.utils.StepController import StepController
 from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
+from src.utils.Trie import TrieNode
 from src.config import get_logger, get_dashboard_handler
+from src.models.TypeDef import TypeDef
 
 
 log = get_logger()
@@ -26,7 +29,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
     system_prompt = f"You are a function calling router. \
       Available functions:\n{available_fun}\n. \
       Return a JSON object with the name of the function that matches the user request.\
-      If the query is empty or ambiguous return flag values : -1 for number and 'ERROR' for strings."
+      The parameter VALUES must be extracted DIRECTLY and LITERALLY from the user prompt when possible."
     chat_prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         f"<|im_start|>user\n{current_prompt}<|im_end|>\n"
@@ -54,7 +57,7 @@ def _output_generated_json(generated: str) -> dict[Any, Any]:
 
 def _get_dashboard_generated(generated: str) -> str:
     """Extract relevant generated text for debugging"""
-    content_start_idx = generated.index('"prompt":')
+    content_start_idx = generated.find('"prompt":')
     if content_start_idx != -1:
         return generated[content_start_idx:]
     return generated
@@ -65,6 +68,9 @@ def execute_with_dashboard(model: Small_LLM_Model,
                            available_fun: str,
                            controller: AutomatonController,
                            tokenid_to_bytes: dict[int, bytes],
+                           tokenbytes_to_id: dict[bytes, int],
+                           trie_root: TrieNode,
+                           value_buckets: dict[TypeDef, list[int]],
                            timeout: float = 10.0,
                            is_debug: bool = False,
                            ) -> dict[Any, Any]:
@@ -101,9 +107,12 @@ def execute_with_dashboard(model: Small_LLM_Model,
         return execute_decoding(
             model=model,
             tokenid_to_bytes=tokenid_to_bytes,
+            tokenbytes_to_id=tokenbytes_to_id,
             current_prompt=current_prompt,
             available_fun=available_fun,
             controller=controller,
+            value_buckets=value_buckets,
+            trie_root=trie_root,
             timeout=timeout,
             is_debug=is_debug,
             on_step=ui_callback
@@ -147,7 +156,7 @@ def _update_metrics(
     stat_top1_rejected_pc = stat_top1_rejected_count / stat_loops
 
     known_ids = set(tokenid_to_bytes.keys())
-    top_global_ids = [int(t_id) for t_id in np.argsort(logits)[::-1] if int(t_id) in known_ids][:10]
+    top_global_ids = [int(t_id) for t_id in np.argsort(logits)[::-1] if int(t_id) in known_ids][:25]
     sorted_global_ids = np.argsort(logits)[::-1]
     top_tokens_data = []
     for t_id in top_global_ids:
@@ -163,6 +172,7 @@ def _update_metrics(
             'filtered': float(filtered_logits[t_id]),
             'rank': rank
         })
+        # log.debug(f"token:|{disp_readable}|\t\tfiltered:{float(filtered_logits[t_id])}")
     actual_rank = int(np.where(sorted_global_ids == next_token_id)[0][0]) + 1
     stat_selected_ranks.append(actual_rank)
     stat_avg_rank = sum(stat_selected_ranks) / len(stat_selected_ranks)
@@ -187,13 +197,33 @@ def _update_metrics(
     return state
 
 
+def _add_quote_if_starting_val(controller: AutomatonController, tokenbytes_to_id: dict[bytes, int],
+                               input_ids: list[int]) -> bool:
+    try:
+        p_type = controller.get_current_parameter_type()
+        if not p_type or controller.current_buffer_b != b"":
+            return False
+        if p_type == TypeDef.STRING:
+            quote_token_id = tokenbytes_to_id[b'"']
+            input_ids.append(quote_token_id)
+            return True
+        return False
+    except Exception as e:
+        log.error(f"Unexpected error: {e}")
+        traceback.print_exc()
+        return False
+
+
 def execute_decoding(model: Small_LLM_Model,
                      tokenid_to_bytes: dict[int, bytes],
+                     tokenbytes_to_id: dict[bytes, int],
                      current_prompt: str,
                      available_fun: str,
                      controller: AutomatonController,
+                     trie_root: TrieNode,
+                     value_buckets: dict[TypeDef, list[int]],
                      timeout: float = 10.0,
-                     is_debug: bool = True,
+                     is_debug: bool = False,
                      on_step: Callable[[DecodingStepState, AutomatonController], bool] | None = None) -> dict[Any, Any]:
     """Core decoding loop"""
 
@@ -208,8 +238,14 @@ def execute_decoding(model: Small_LLM_Model,
     while not controller.is_finished:
         if (time.time() - start_time) > timeout:
             raise DecodingTimeoutException(f"timeout reached ({timeout}s)")
+
+        if _add_quote_if_starting_val(controller=controller, tokenbytes_to_id=tokenbytes_to_id, input_ids=input_ids):
+            controller.consume_token_bytes(b'"')
+            generated += '"'
+            continue
+
         logits = np.array(model.get_logits_from_input_ids(input_ids))
-        authorized_tokens_ids = controller.evaluate_tokens(tokenid_to_bytes)
+        authorized_tokens_ids = controller.evaluate_tokens(tokenid_to_bytes, trie_root, value_buckets)
 
         if not authorized_tokens_ids:
             raise DecodingBlockedException(f"automata blocked at {controller.state_label} : no authorized token")
@@ -224,8 +260,6 @@ def execute_decoding(model: Small_LLM_Model,
         token_bytes = tokenid_to_bytes[next_token_id]
         controller.consume_token_bytes(token_bytes)
         readable_chunk = custom_utf8_decoder.decode(token_bytes)
-        # readable_chunk = utf8_decoder.decode(token_bytes)
-        # readable_chunk = token_bytes.decode(errors="surrogateescape")
 
         if is_debug:
             stat_loops += 1

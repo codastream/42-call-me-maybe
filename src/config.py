@@ -30,8 +30,8 @@ def setup_logging(level: int = logging.INFO) -> None:
     if _configured:
         return
 
-    if os.getenv("DEBUG") != "True":
-        level = logging.INFO
+    if os.getenv("DEBUG") == "True":
+        level = logging.DEBUG
 
     _console_handler = RichHandler(rich_tracebacks=True, markup=True)
     _dashboard_handler = DashboardLogHandler()

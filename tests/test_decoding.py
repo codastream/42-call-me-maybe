@@ -11,11 +11,13 @@ from llm_sdk import Small_LLM_Model
 
 from src.matcher import AutomatonController
 from src.models import FunctionDefinition, TestDefinition
-from src.utils.convert import extract_and_cache_vocabulary
+from src.utils.convert import extract_and_cache_vocabulary, build_value_buckets
+from src.utils.Trie import TrieNode
 from src.decode import execute_decoding
 from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
 
 log = logging.getLogger("unittest")
+log.setLevel(logging.INFO)
 
 
 class TestConstrainedDecoding(unittest.TestCase):
@@ -30,6 +32,7 @@ class TestConstrainedDecoding(unittest.TestCase):
     model: Small_LLM_Model
     TOKENID_TO_PRINT: dict[int, str]
     TOKENID_TO_BYTES: dict[int, bytes]
+    BYTES_TO_TOKENID: dict[bytes, int] = {}
     available_fun: str
 
     @classmethod
@@ -56,7 +59,10 @@ class TestConstrainedDecoding(unittest.TestCase):
             }
 
         cls.model = Small_LLM_Model(local_files_only=True)
-        cls.TOKENID_TO_BYTES, cls.TOKENID_TO_PRINT = extract_and_cache_vocabulary(cls.model.get_path_to_vocab_file())
+        cls.TOKENID_TO_BYTES, cls.TOKENID_TO_PRINT, cls.BYTES_TO_TOKENID = extract_and_cache_vocabulary(
+            cls.model.get_path_to_vocab_file())
+        cls.trie_root = TrieNode.build_vocab_trie(cls.TOKENID_TO_BYTES)
+        cls.value_buckets = build_value_buckets(cls.TOKENID_TO_BYTES)
 
 
 def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
@@ -81,9 +87,12 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
             received_json = execute_decoding(
                 model=self.model,
                 tokenid_to_bytes=self.TOKENID_TO_BYTES,
+                tokenbytes_to_id=self.BYTES_TO_TOKENID,
                 current_prompt=current_prompt,
                 available_fun=self.available_fun,
                 controller=controller,
+                trie_root=self.trie_root,
+                value_buckets=self.value_buckets,
                 timeout=self.timeout_limit,
                 is_debug=False
             )

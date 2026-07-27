@@ -47,47 +47,54 @@ class DebugDashboard:
     def _setup_layout(self) -> None:
         """Declare layout"""
         h = self.console.size.height
-        top_size = 14
-        bottom_size = h - top_size
-        token_size = 9
-        stats_size = 6
-        logs_size = 10
-        json_size = bottom_size - token_size - stats_size - logs_size
+        top_size = 5
+        middle_size = 32
+        bottom_size = h - top_size - middle_size
 
         self.layout.split_column(
             Layout(name="top", size=top_size),
-            Layout(name="bottom", ratio=bottom_size)
+            Layout(name="middle", size=middle_size),
+            Layout(name="bottom", size=bottom_size)
         )
 
         self.layout["top"].split_column(
             Layout(name="help", size=5),
-            Layout(name="automaton_row", size=9),
         )
 
-        self.layout["automaton_row"].split_row(
-            Layout(name="automaton", ratio=5),
-            Layout(name="stack", ratio=2)
+        self.layout["middle"].split_row(
+            Layout(name="middle-left", ratio=5),
+            Layout(name="middle-right", ratio=2)
         )
 
-        self.layout["bottom"].split_row(
-            Layout(name="right_metrics", ratio=1)
+        self.layout["middle-left"].split_column(
+            Layout(name="automaton", size=5),
+            Layout(name="token_table", size=27),
         )
 
-        self.layout["right_metrics"].split_column(
-            Layout(name="token_table", size=token_size),
-            Layout(name="summary_stats", size=stats_size),
-            Layout(name="json_preview", size=json_size),
-            Layout(name="logs", size=logs_size)
+        self.layout["middle-right"].split_column(
+            Layout(name="stack", ratio=1),
+            Layout(name="stat_loops", size=3),
+            Layout(name="stat_rejected_count", size=3),
+            Layout(name="stat_rejected_pct", size=3),
+            Layout(name="stat_avg_rank", size=3)
         )
 
-        self.layout["summary_stats"].split_row(
-            Layout(name="stat_loops", ratio=1),
-            Layout(name="stat_rejected_count", ratio=1),
-            Layout(name="stat_rejected_pct", ratio=1),
-            Layout(name="stat_avg_rank", ratio=1),
+        self.layout["bottom"].split_column(
+            Layout(name="json_preview", ratio=1),
+            Layout(name="logs", ratio=2)
         )
 
-        self.layout["summary_stats"].split
+        # self.layout["automaton_row"].split_row(
+        #     Layout(name="automaton_row", size=8),
+        #     Layout(name="automaton", ratio=5),
+        # )
+
+        # self.layout["summary_stats"].split_column(
+        #     Layout(name="stat_loops", ratio=1),
+        #     Layout(name="stat_rejected_count", ratio=1),
+        #     Layout(name="stat_rejected_pct", ratio=1),
+        #     Layout(name="stat_avg_rank", ratio=1),
+        # )
 
     def _build_automaton_graph(self, current_stage: str) -> None:
         """Display automaton states"""
