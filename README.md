@@ -134,7 +134,7 @@ __boolean mask__ (chosen option)
 | Criteria | Treshold | All vocabulary |
 | --- | ---- | ----------------- |
 | JSON validity | 100% | 100% |
-| execution speed | < 300 s | 202 |
+| execution speed | < 300 s | 200 |
 | accuracy | > 90% | 100% |
 
 
@@ -150,7 +150,8 @@ __Mitigation__ : Building dictionaries once and for all. Tradeoff : _performance
 
 __Challenge__ : Patching for edge case can lead to adding layers of logic and spreading in matchers and/or at different states (evaluation - token consumption)
 
-__Mitigation__ : Trying to have state redirection logic centralized in `AutomatonController` and having matchers implement a common interface.
+__Mitigation__ : 
+- trying to have state redirection logic centralized in `AutomatonController` and having matchers implement a common interface.
 
 ## Minute evaluation of state transition
 
@@ -174,11 +175,12 @@ __Challenge__ : Adapting the granularity level on which to apply constraints (by
 __Mitigation__ : 
 - comparison on byte sequences rather than character by character
 - caching dictionaries
+- prefiltering tokens ahead of looping through them : did not improve much, as we need to remain permissive in most of the cases
 
 ## Grokking the theory
 
 It took some time before distinguishing the big picture among all the new concepts introduced by the subject.
-Little by little, the underlying concepts were explored, although not many
+Little by little, the underlying concepts were explored.
 
 # Testing strategy
 
@@ -202,8 +204,7 @@ Partially done for missing files, file permissions. Could be converted to unit t
 
 # Possible extensions
 
-- context-free grammars : BNF
-- Trie : optimal data structure to identify valid token ids
+- context-free grammars : BNF -> push-down automata would be the best take to improve code architecture and avoid patching limitations of finite state automaton
 - multi-model compatibility
 - recoding the tokenizer
 - performance optimization with caching and or batching
@@ -215,7 +216,8 @@ Partially done for missing files, file permissions. Could be converted to unit t
 | --- | ---- | ----------------- |
 |[Andrew Docherty - Controlling your LLM](https://medium.com/@docherty/controlling-your-llm-deep-dive-into-constrained-generation-1e561c736a20)|🗞️ article|                   |
 |[Aidan Cooper - A Guide to Structured Generation Using Constrained Decoding](https://www.aidancooper.co.uk/constrained-decoding/)|🗞️ article |3 forms (regex, code, hybrid) + pitfalls |
-|[Willard & Louf- Efficient guided generation for LLM](https://arxiv.org/abs/2307.09702)|🗞️ article |2023 publication |
+|[Willard & Louf- Efficient guided generation for LLM](https://arxiv.org/abs/2307.09702)|🗞️ article |2023 publication - not fully read|
+|[On the topic of constrained decoding](https://www.emergentmind.com/topics/constrained-decoding-mechanism)|🗞️ articles digest | sota yet not fully digested|
 |[Structured output from LLMs](https://www.youtube.com/watch?v=xpvFinvqRCA)|🎬 video | 17 mn. Good summary |
 |[Argparse doc](https://docs.python.org/3/library/argparse.html) | 📔 doc | module to parse arguments |
 |[Pydantic doc](https://pydantic.dev/docs/validation/latest/concepts/models/)|📔 doc|Models used to validate input|

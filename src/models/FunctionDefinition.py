@@ -13,6 +13,7 @@ class ReturnDef(BaseModel):
 
 
 class FunctionDefinition(BaseModel):
+    """Model for parsing function definitions"""
     name: str
     description: str
     parameters: Dict[str, ParameterDef] = Field(default_factory=dict)

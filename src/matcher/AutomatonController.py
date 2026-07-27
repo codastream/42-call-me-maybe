@@ -11,6 +11,7 @@ from src.config import get_logger
 
 
 class AutomatonController:
+    """In charge of evaluating tokens and managing state transitions"""
     PROMPT_PREFIX: bytes = b'{"prompt": "'
     NAME_PREFIX: bytes = b'", "name": "'
     PARAM_PREFIX: bytes = b'", "parameters": {'
@@ -117,8 +118,7 @@ class AutomatonController:
             self._push_next()
 
     def _get_next_matcher_after_value(self) -> TokenMatcher:
-        """Peek next possible matcher
-        """
+        """Peek next possible matcher"""
         next_targets = [k for k in self._remaining_keys() if k != self.selected_param_key]
         if next_targets:
             targets = self._get_next_possible_key_matchers()
@@ -136,6 +136,7 @@ class AutomatonController:
         return self._build_matcher_for_state(next_state)
 
     def get_current_parameter_type(self) -> TypeDef | None:
+        """Return current evaluated type if current matcher is ValueMatcher"""
         if (self.state == AState.PARAM_VAL and self.selected_function and self.selected_param_key):
             return self.selected_function.parameters[self.selected_param_key].type
         return None
@@ -204,7 +205,7 @@ class AutomatonController:
             \tself.current_buffer_b = {self.current_buffer_b!r}
             \tpending_bytes = {pending_bytes!r}
             """)
-            # ex cases: '3' + '4' -> PARAM_VAL / '3' + '4}'
+            # ex cases: buf b'3' + token b'4'
             if top.evaluate(combined_buf):
                 self.current_buffer_b = combined_buf
                 top.commit(self.current_buffer_b)
@@ -232,7 +233,7 @@ class AutomatonController:
                         continue
                 break
 
-            # cases '34' + '}'
+            # case buf '34' + token '}' - way to detect end of ValueMatcher
             elif top.is_complete(self.current_buffer_b):
                 self.current_buffer_b = combined_buf
                 top.commit(self.current_buffer_b)
@@ -242,7 +243,7 @@ class AutomatonController:
                 self._advance_state(leftover=b"")
                 continue
 
-            # case '3' + '4}'
+            # case buf '3' + token '4}' - another way to detect end of ValueMatcher
             elif top.is_complete(combined_buf):
                 leftover = top.leftover_bytes(combined_buf)
                 consumed_len = len(leftover) if leftover else len(combined_buf)
@@ -258,6 +259,8 @@ class AutomatonController:
                 self._advance_state(leftover=leftover)
                 pending_bytes = b""
                 continue
+
+            # should not happen
             else:
                 self.log.error(f"consume:\tunable to consume {pending_bytes!r} in state {self.state_label}")
                 break

@@ -84,18 +84,6 @@ class DebugDashboard:
             Layout(name="logs", ratio=2)
         )
 
-        # self.layout["automaton_row"].split_row(
-        #     Layout(name="automaton_row", size=8),
-        #     Layout(name="automaton", ratio=5),
-        # )
-
-        # self.layout["summary_stats"].split_column(
-        #     Layout(name="stat_loops", ratio=1),
-        #     Layout(name="stat_rejected_count", ratio=1),
-        #     Layout(name="stat_rejected_pct", ratio=1),
-        #     Layout(name="stat_avg_rank", ratio=1),
-        # )
-
     def _build_automaton_graph(self, current_stage: str) -> None:
         """Display automaton states"""
         graph = Text()
