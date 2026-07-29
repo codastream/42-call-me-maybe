@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "dotenv>=0.9.9",
+    "llm-sdk",
     "numpy>=2.2.6",
     "pydantic>=2.13.3",
     "rich>=15.0.0",
@@ -43,11 +44,6 @@ plugins = [
     "pydantic.mypy"
 ]
 
-[[tool.mypy.overrides]]
-module = "llm_sdk.*"
-ignore_errors = true
-follow_imports = "skip"
-
 [tool.ruff]
 line-length = 80
 
@@ -60,3 +56,11 @@ select = ["D"] # pydocstyle
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.uv.workspace]
+members = [
+    "llm_sdk",
+]
+
+[tool.uv.sources]
+llm-sdk = { workspace = true, editable = true }

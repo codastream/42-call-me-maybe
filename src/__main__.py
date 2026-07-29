@@ -65,7 +65,7 @@ def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict
                                          TrieNode, dict[TypeDef, list[int]]]:
     """Initialize model and vocabulary maps"""
     log = get_logger()
-    model = Small_LLM_Model(local_files_only=True)
+    model = Small_LLM_Model()
     vocab_file_path = model.get_path_to_vocab_file()
 
     dic_id_to_bytes: dict[int, bytes] = {}
