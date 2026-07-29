@@ -93,7 +93,7 @@ def generate_results(fun_defs: list[FunctionDefinition], tests: list[TestDefinit
 
     total_start = time.time()
 
-    for test in tests[8:]:
+    for test in tests[:]:
         try:
             log.info(f"processing prompt: {test.prompt}")
             controller = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
