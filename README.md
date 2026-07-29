@@ -247,6 +247,7 @@ Optimize multidimensional array computation
 - `np.argsort(array)` : return indices that would sort array in asc. order. Used for debugging and visualization
 - `np.full_like` generate a NumPy array with same shape and type as the one provided. Used to create a mask
 - `np.isclose(a, b)` safely compare float arrays. Used for debugging and visualization
+- `np.where(condition)`. Used for visualization (rank extraction)
 
 ### pydantic
 
@@ -258,12 +259,19 @@ Required by the subject. Ensure schema validation.
 
 ### rich
 
-Enrich display and logs
+Enrich logs and debugging. rich methods can make use of markup to add [color](https://rich.readthedocs.io/en/stable/appendix/colors.html) and styling.
 
-- `logging.RichHandler` can be integrated into `logging` module. Replace raw text with colored lines + file and line number
-- `table.Table` to dynamically generate table
-- `print` as an overload to native method
-- `Layout`, `Text`, .. for the dashboard
+- `print` aliased as `rprint` is used in legacy debug functions
+- `logging.RichHandler` can be integrated into python standard `logging` module. We get automatically colored lines, source filename and line number
+- dashboard is generated using following elements: 
+  - `live.Live` manages smooth real-time update
+  - `console.Console` provides info about terminal (and includes unused helper methods like automatic json formatting)
+  - `layout.Layout` splits terminal into a flexible grid
+  - `panel.Panel` wraps content into a framed border with title
+  - `table.Table` and `text.Text` structure tabular data and text blocks
+  - `align.Align` centers content within layout cells
+
+Promising features : `rich.traceback` to get structured traceback messages integrating source code
 
 ## AI Usage
 
@@ -381,7 +389,7 @@ __derivation__ refers to the replacement pattern of non-terminal symbols when co
 
 ## Byte-pair encoding tokenization
 
-Encode _most frequent pairs of adjacent tokens_ into a new token, until the _vocabulary_ reaches a certain size.
+Encode _most frequent pairs of adjacent bytes_ into a new token, until the _vocabulary_ reaches a certain size.
 
 While classical BPE starts from a character, _byte-level BPE_ (first used by GPT-2, then other models such as Qwen) builds upon raw bytes (ranging from 0 to 255). BPE allows to tokenize any binary flow (code, pictures, ...) without labelling any token as unknown.
 
@@ -405,7 +413,7 @@ cf. function `bytes_to_unicode` in the project : it simply adds 256 to non print
 
 - Grouping
 Pairs are iteratively merged (most frequent are merged first), till the vocabulary reaches its max size (151 643 tokens for Qwen-2)
-  - `\x48` (H) + `\x68` (i) -> token ID (ex 1234)
+  - `\x48` (H) + `\x69` (i) -> token ID (ex 1234)
 
 # Appendix
 
