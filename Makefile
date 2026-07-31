@@ -25,8 +25,14 @@ test-v:
 test-debug:
 	$(PYTHONPATH_ENV) uv run pytest tests/test_decoding.py --log-level DEBUG
 
-test-robust:
-	uv run python -m src --input 'data/input/function_calling_tests_robustness.json'
+test-robust-input-exit:
+	bash test_model.sh
+
+test-robust-input:
+	uv run python -m src --input 'data/input/function_calling_tests_robustness_1.json'
+
+test-robust-fundef:
+	uv run python -m src --functions_definition 'data/input/functions_definition_robustness_2.json' --input 'data/input/function_calling_tests_robustness_2.json'
 
 clean:
 	find . -name '__pycache__' -exec rm -rf {} +

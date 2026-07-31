@@ -1,0 +1,14 @@
+[
+   {
+      "name":"fn_say_hi_many_times",
+      "description":"Output 'Hi' as many times as determined by the parameter",
+      "parameters":{
+         "times":{
+            "type":"integer"
+         }
+      },,
+      "returns":{
+         "type":"string"
+      }
+   },
+]
