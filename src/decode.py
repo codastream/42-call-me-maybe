@@ -1,15 +1,16 @@
 import time
 import json
 import traceback
-from typing import cast, Any, Callable
+from typing import cast, Any, Callable, Tuple
 
 from rich.live import Live
 import numpy as np
 import numpy.typing as npt
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 from src.matcher.AutomatonController import AutomatonController
 from src.matcher.AutomatonDef import AState
+from src.matcher import StaticSequenceMatcher
 from src.exceptions import DecodingBlockedException, DecodingTimeoutException, InvalidPayloadException
 from src.utils.DebugDashboard import DebugDashboard, DecodingStepState
 from src.utils.StepController import StepController
@@ -70,7 +71,7 @@ def execute_with_dashboard(model: Small_LLM_Model,
                            tokenid_to_bytes: dict[int, bytes],
                            tokenbytes_to_id: dict[bytes, int],
                            trie_root: TrieNode,
-                           value_buckets: dict[TypeDef, list[int]],
+                           value_buckets: dict[TypeDef, set[int]],
                            timeout: float = 10.0,
                            is_debug: bool = False,
                            ) -> dict[Any, Any]:
@@ -206,12 +207,28 @@ def _add_quote_if_starting_val(controller: AutomatonController, tokenbytes_to_id
         if p_type == TypeDef.STRING:
             quote_token_id = tokenbytes_to_id[b'"']
             input_ids.append(quote_token_id)
+            controller.consume_token_bytes(b'"')
+            log.debug("automatically added \" as a string value prefix")
             return True
         return False
     except Exception as e:
         log.error(f"Unexpected error: {e}")
         traceback.print_exc()
         return False
+
+
+def _add_expected_sequence(model: Small_LLM_Model, controller: AutomatonController, tokenbytes_to_id: dict[bytes, int],
+                           input_ids: list[int]) -> Tuple[bool, str]:
+    top_matcher = controller._top
+    if not isinstance(top_matcher, StaticSequenceMatcher):
+        return False, ""
+    matcher = top_matcher
+    target_text = matcher.target.decode(errors="surrogateescape")
+    forced_t_ids = model.encode(target_text)[0].tolist()
+    input_ids.extend(forced_t_ids)
+    controller.consume_token_bytes(matcher.target)
+    log.debug(f"automatically added {matcher.target!r}")
+    return True, target_text
 
 
 def execute_decoding(model: Small_LLM_Model,
@@ -221,7 +238,7 @@ def execute_decoding(model: Small_LLM_Model,
                      available_fun: str,
                      controller: AutomatonController,
                      trie_root: TrieNode,
-                     value_buckets: dict[TypeDef, list[int]],
+                     value_buckets: dict[TypeDef, set[int]],
                      timeout: float = 10.0,
                      is_debug: bool = False,
                      on_step: Callable[[DecodingStepState, AutomatonController], bool] | None = None) -> dict[Any, Any]:
@@ -240,8 +257,13 @@ def execute_decoding(model: Small_LLM_Model,
             raise DecodingTimeoutException(f"timeout reached ({timeout}s)")
 
         if _add_quote_if_starting_val(controller=controller, tokenbytes_to_id=tokenbytes_to_id, input_ids=input_ids):
-            controller.consume_token_bytes(b'"')
             generated += '"'
+            continue
+
+        is_static_state, extra = _add_expected_sequence(
+            model, controller=controller, tokenbytes_to_id=tokenbytes_to_id, input_ids=input_ids)
+        if is_static_state:
+            generated += extra
             continue
 
         logits = np.array(model.get_logits_from_input_ids(input_ids))

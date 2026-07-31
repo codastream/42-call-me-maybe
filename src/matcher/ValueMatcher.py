@@ -52,35 +52,47 @@ class ValueMatcher(TokenMatcher):
             i += 1
         return count
 
-    def __init__(self, type: TypeDef):
+    def __init__(self, type_def: TypeDef, value_buckets: dict[TypeDef, set[int]]):
         """Initializer with type"""
-        self.type = type
+        self.type = type_def
+        self.allowed_bucket: set[int] = value_buckets.get(type_def, set())
 
-    def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                             value_buckets: dict[TypeDef, list[int]]) -> list[int]:
+    def prefilter_candidates(
+            self,
+            current_buf: bytes,
+            token_id_to_bytes: dict[int, bytes],
+            trie_root: TrieNode,
+            value_buckets: dict[TypeDef, set[int]]
+    ) -> list[int]:
         """Filter the vocabulary tokens to iterate around"""
-        if self.is_complete(current_buf) or self.type == TypeDef.STRING:
+        if self.is_complete(current_buf):
             return list(token_id_to_bytes.keys())
-        return list(value_buckets.get(self.type, []))
+
+        if self.type == TypeDef.STRING and current_buf:
+            return list(token_id_to_bytes.keys())
+
+        if not current_buf:
+            log.debug("start of ValueMatcher, returning all allowed tokens for its type")
+            return list(self.allowed_bucket)
+
+        return list(self.allowed_bucket)
 
     def evaluate(self, buf: bytes) -> bool:
         """Return True if buffer maintains type consistency for a non final value"""
         s = bytes_to_str(buf)
         if s is None:
             return False
-        if not s:
+        stripped = s.lstrip()
+        if not stripped:
             return True
 
         if self.type == TypeDef.NUMBER:
-            return bool(self._PARTIAL_NUM_RE.match(s))
+            return bool(self._PARTIAL_NUM_RE.match(stripped))
 
         if self.type == TypeDef.BOOLEAN:
-            return "true".startswith(s) or "false".startswith(s)
+            return "true".startswith(s) or "false".startswith(stripped)
 
         if self.type == TypeDef.STRING:
-            stripped = s.lstrip(' ')
-            if not stripped:
-                return True
             if stripped[0] != '"':
                 print(f"[DEBUG ValueMatcher STRING] rejected for not starting with '\"': {s!r}")
                 return False
@@ -102,19 +114,20 @@ class ValueMatcher(TokenMatcher):
         # log.debug(f"is_complete: type={self.type} buf={buf!r} s={s!r} not_s={not s} len={len(s) if s else 'N/A'}")
         if not s:
             return False
-
+        stripped = s.lstrip()
+        if not stripped:
+            return False
         if self.type == TypeDef.NUMBER:
-            if bool(self._FULL_NUM_RE.match(s)):
+            if bool(self._FULL_NUM_RE.match(stripped)):
                 return True
-            match = self._EXTRACT_NUM_RE.match(s)
+            match = self._EXTRACT_NUM_RE.match(stripped)
             return match is not None and len(match.group(0)) > 0
 
         if self.type == TypeDef.BOOLEAN:
-            return s in ("true", "false")
+            return stripped in ("true", "false")
 
         if self.type == TypeDef.STRING:
-            stripped = s.lstrip(' ')
-            if not stripped or stripped[0] != '"':
+            if stripped[0] != '"':
                 return False
             return self._count_unescaped_quotes(stripped) >= 2
         return False
@@ -142,12 +155,14 @@ class ValueMatcher(TokenMatcher):
             return b""
 
         if self.type == TypeDef.NUMBER:
+            stripped = s.lstrip()
             match = self._EXTRACT_NUM_RE.match(s)
             if not match:
                 return b""
             matched_text = match.group(0)
-            matched_bytes = matched_text.encode(errors="surrogateescape")
-            return buf[len(matched_bytes):]
+            leading_space_len = len(s) - len(stripped)
+            consumed_len = len((s[:leading_space_len] + matched_text).encode(errors="surrogateescape"))
+            return buf[consumed_len:]
 
         if self.type == TypeDef.STRING:
             end = self._find_string_end(s)

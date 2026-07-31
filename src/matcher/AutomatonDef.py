@@ -20,8 +20,8 @@ class Transition:
 AUTOMATON: dict[AState, Transition] = {
     AState.FUN_NAME_VAL: Transition("Function name (val)", AState.PARAMS_OBJ_KEY),
     AState.PARAMS_OBJ_KEY: Transition("Function name (key)", AState.PARAM_KEY),
-    AState.PARAM_KEY: Transition("Function name (key)", AState.PARAM_VAL),
-    AState.PARAM_VAL: Transition("Function name (key)", None),
-    AState.CLOSE: Transition("Function name (key)", AState.FINISH),
+    AState.PARAM_KEY: Transition("Param (key)", AState.PARAM_VAL),
+    AState.PARAM_VAL: Transition("Param (key)", None),
+    AState.CLOSE: Transition("Close", AState.FINISH),
     AState.FINISH: Transition("Finish", None),
 }

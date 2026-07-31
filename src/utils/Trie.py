@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 
 class TrieNode:
@@ -32,3 +33,20 @@ class TrieNode:
         else:
             valids.extend(node.token_ids)
         return valids
+
+    def find_node(self, prefix: bytes) -> Optional[TrieNode]:
+        node = self
+        for byte in prefix:
+            if byte not in node.children:
+                return None
+            node = node.children[byte]
+        return node
+
+    def get_all_subtree_token_ids(self) -> list[int]:
+        results: list[int] = list(self.token_ids)
+        stack = list(self.children.values())
+        while stack:
+            curr = stack.pop()
+            results.extend(curr.token_ids)
+            stack.extend(curr.children.values())
+        return results

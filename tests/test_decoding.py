@@ -7,10 +7,11 @@ import sys
 from typing import Any, Callable
 
 from pydantic import TypeAdapter
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 from src.matcher import AutomatonController
 from src.models import FunctionDefinition, TestDefinition
+from src.models.TypeDef import TypeDef
 from src.utils.convert import extract_and_cache_vocabulary, build_value_buckets
 from src.utils.Trie import TrieNode
 from src.decode import execute_decoding
@@ -34,6 +35,8 @@ class TestConstrainedDecoding(unittest.TestCase):
     TOKENID_TO_BYTES: dict[int, bytes]
     BYTES_TO_TOKENID: dict[bytes, int] = {}
     available_fun: str
+    value_buckets: dict[TypeDef, set[int]]
+    trie_root: TrieNode
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -58,7 +61,7 @@ class TestConstrainedDecoding(unittest.TestCase):
                 for prompt, data in item.items()
             }
 
-        cls.model = Small_LLM_Model(local_files_only=True)
+        cls.model = Small_LLM_Model()
         cls.TOKENID_TO_BYTES, cls.TOKENID_TO_PRINT, cls.BYTES_TO_TOKENID = extract_and_cache_vocabulary(
             cls.model.get_path_to_vocab_file())
         cls.trie_root = TrieNode.build_vocab_trie(cls.TOKENID_TO_BYTES)
@@ -82,7 +85,7 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
         try:
             log.info(f"processing prompt: {current_prompt}")
 
-            controller = AutomatonController(fun_defs=self.fun_defs, initial_prompt=current_prompt.encode())
+            controller = AutomatonController(fun_defs=self.fun_defs, value_buckets=self.value_buckets)
 
             received_json = execute_decoding(
                 model=self.model,

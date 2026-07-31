@@ -10,6 +10,9 @@ from src.utils.Trie import TrieNode
 from src.config import get_logger
 
 
+log = get_logger()
+
+
 class AutomatonController:
     """In charge of evaluating tokens and managing state transitions"""
     PROMPT_PREFIX: bytes = b'{"prompt": "'
@@ -17,7 +20,7 @@ class AutomatonController:
     PARAM_PREFIX: bytes = b'", "parameters": {'
     CLOSE_SUFFIX: bytes = b'}}'
 
-    def __init__(self, fun_defs: list[FunctionDefinition], initial_prompt: bytes):
+    def __init__(self, fun_defs: list[FunctionDefinition], value_buckets: dict[TypeDef, set[int]]):
         """Initialize controller"""
 
         self.state = AState.FUN_NAME_VAL
@@ -28,6 +31,7 @@ class AutomatonController:
         self.selected_param_key: str | None = None
         self.pipeline: list[TokenMatcher] = []
         self.current_buffer_b: bytes = b""
+        self.value_buckets: dict[TypeDef, set[int]] = value_buckets
         self._push_next()
 
     @property
@@ -67,7 +71,7 @@ class AutomatonController:
     def _build_matcher_for_state(self, state: AState) -> TokenMatcher | None:
         """return a matcher according to state"""
         next_matcher: TokenMatcher | None = None
-        match self.state:
+        match state:
             case AState.FUN_NAME_VAL:
                 names = [f.name.encode() for f in self.fun_defs]
                 next_matcher = ChoiceMatcher(names)
@@ -79,7 +83,7 @@ class AutomatonController:
             case AState.PARAM_VAL:
                 if self.selected_function and self.selected_param_key:
                     p_type = self.selected_function.parameters[self.selected_param_key].type
-                    next_matcher = ValueMatcher(p_type)
+                    next_matcher = ValueMatcher(p_type, self.value_buckets)
             case AState.CLOSE:
                 next_matcher = ChoiceMatcher([b'}}', b' }}', b'}', b' }'])
         return next_matcher
@@ -142,24 +146,29 @@ class AutomatonController:
         return None
 
     def evaluate_tokens(self, tokenid_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                        value_buckets: dict[TypeDef, list[int]]) -> list[int]:
+                        value_buckets: dict[TypeDef, set[int]]) -> list[int]:
         """Prefilter and evaluate token against current state"""
         top = self._top
         if top is None:
             return []
 
-        candidates_ids = top.prefilter_candidates(
-            self.current_buffer_b,
-            token_id_to_bytes=tokenid_to_bytes,
-            trie_root=trie_root,
-            value_buckets=value_buckets
-        )
+        try:
+            candidates_ids = top.prefilter_candidates(
+                self.current_buffer_b,
+                token_id_to_bytes=tokenid_to_bytes,
+                trie_root=trie_root,
+                value_buckets=value_buckets
+            )
 
-        valid_t_ids = []
-        for t_id in candidates_ids:
-            t_b = tokenid_to_bytes[t_id]
-            if self.evaluate_token_bytes(t_b):
-                valid_t_ids.append(t_id)
+            valid_t_ids = []
+            for t_id in candidates_ids:
+                t_b = tokenid_to_bytes[t_id]
+                if self.evaluate_token_bytes(t_b):
+                    valid_t_ids.append(t_id)
+
+        except Exception as e:
+            log.exception(e)
+
         return valid_t_ids
 
     def evaluate_token_bytes(self, token_b: bytes) -> bool:

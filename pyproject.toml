@@ -21,6 +21,7 @@ dev = [
     "flake8>=7.3.0",
     "mypy>=1.20.2",
     "pydantic>=2.13.3",
+    "pytest>=9.1.1",
 ]
 
 [tool.mypy]
@@ -44,19 +45,6 @@ plugins = [
     "pydantic.mypy"
 ]
 
-[tool.ruff]
-line-length = 80
-
-[tool.ruff.format]
-indent-style = "space"
-indent-width = 2
-
-[tool.ruff.lint]
-select = ["D"] # pydocstyle
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-
 [tool.uv.workspace]
 members = [
     "llm_sdk",
@@ -64,3 +52,7 @@ members = [
 
 [tool.uv.sources]
 llm-sdk = { workspace = true, editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]

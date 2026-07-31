@@ -17,13 +17,13 @@ debug:
 	uv run python -m pdb -m src
 
 test:
-	$(PYTHONPATH_ENV) DEBUG=False uv run python tests/test_decoding.py
+	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py
 
 test-v:
-	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py -v
+	$(PYTHONPATH_ENV) uv run pytest tests/test_decoding.py -v
 
 test-debug:
-	$(PYTHONPATH_ENV) uv run python tests/test_decoding.py --log-level DEBUG
+	$(PYTHONPATH_ENV) uv run pytest tests/test_decoding.py --log-level DEBUG
 
 test-robust:
 	uv run python -m src --input 'data/input/function_calling_tests_robustness.json'
@@ -37,10 +37,10 @@ format:
 
 lint:
 	uv run flake8 . --statistics
-	uv run mypy .
+	uv run python -m mypy .  --explicit-package-bases
 
 lint-strict:
 	uv run flake8 .
-	uv run python -m mypy src --explicit-package-bases --strict
+	uv run python -m mypy . --explicit-package-bases --strict
 
 .PHONY: all install run run-steps debug clean lint lint-strict format test test-v test-debug test-robust

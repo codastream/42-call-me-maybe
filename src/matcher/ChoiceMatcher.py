@@ -11,7 +11,7 @@ class ChoiceMatcher(TokenMatcher):
         self.matched_target: bytes | None = None
 
     def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                             value_buckets: dict[TypeDef, list[int]]) -> list[int]:
+                             value_buckets: dict[TypeDef, set[int]]) -> list[int]:
         ids: set[int] = set()
         for target in self.acceptable_targets:
             if target.startswith(current_buf):

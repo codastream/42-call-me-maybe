@@ -2,12 +2,14 @@ from src.utils.Trie import TrieNode
 from src.matcher import AutomatonController
 from src.exceptions import DecodingException
 from src.decode import execute_with_dashboard, execute_decoding
-from src.models import FunctionDefinition, TestDefinition
+from src.models import FunctionDefinition, TestDefinition, AppConfig
 from src.models.TypeDef import TypeDef
-from src.checkers import check_args_paths, check_format
+from src.checkers import check_format
 from src.config import get_logger
 from src.utils.convert import extract_and_cache_vocabulary, build_value_buckets
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
+
+from pathlib import Path
 import argparse
 import json
 import sys
@@ -17,13 +19,17 @@ import traceback
 
 from typing import Tuple, Any
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 from dotenv import load_dotenv
 load_dotenv()
 
 
-def validate_files() -> Tuple[str, str, str]:
-    """Validate input files"""
+def validate_files() -> Tuple[Path, Path, Path]:
+    """Validate input files
+
+    Returns:
+        Tuple[Path, Path, Path]: paths to functions definition, input (tests), output
+    """
 
     log = get_logger()
     parser = argparse.ArgumentParser(description="Function calling")
@@ -34,14 +40,14 @@ def validate_files() -> Tuple[str, str, str]:
     args = parser.parse_args()
 
     try:
-        defs_path, input_path, output_path = check_args_paths(args)
-        return defs_path, input_path, output_path
-    except Exception as e:
-        log.error(f"Error: {e}")
+        config = AppConfig.model_validate(vars(args))
+        return config.functions_definition_file, config.input_file, config.output_file
+    except ValidationError as e:
+        log.error(f"Configuration error\n: {e}")
         sys.exit(1)
 
 
-def validate_schema(defs_path: str, input_path: str) -> Tuple[list[FunctionDefinition], list[TestDefinition]]:
+def validate_schema(defs_path: Path, input_path: Path) -> Tuple[list[FunctionDefinition], list[TestDefinition]]:
     """Validate and return function definitions and test prompts"""
 
     log = get_logger()
@@ -57,12 +63,12 @@ def validate_schema(defs_path: str, input_path: str) -> Tuple[list[FunctionDefin
         log.info("tests definitions are valid")
         return fun_defs, tests
     except ValueError as e:
-        log.error(f"Error: {e}")
+        log.error(f"Schema validation error for inputs\n: {e}")
         sys.exit(1)
 
 
 def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict[bytes, int], dict[int, str],
-                                         TrieNode, dict[TypeDef, list[int]]]:
+                                         TrieNode, dict[TypeDef, set[int]]]:
     """Initialize model and vocabulary maps"""
     log = get_logger()
     model = Small_LLM_Model()
@@ -85,7 +91,7 @@ def init_model_and_vocabulary() -> Tuple[Small_LLM_Model, dict[int, bytes], dict
 
 def generate_results(fun_defs: list[FunctionDefinition], tests: list[TestDefinition],  model: Small_LLM_Model,
                      dic_id_to_bytes: dict[int, bytes], dic_bytes_to_id: dict[bytes, int],
-                     trie_root: TrieNode, value_buckets: dict[TypeDef, list[int]]) -> list[dict[Any, Any]]:
+                     trie_root: TrieNode, value_buckets: dict[TypeDef, set[int]]) -> list[dict[Any, Any]]:
     """Decode and return json output"""
     log = get_logger()
     outputs = []
@@ -96,7 +102,7 @@ def generate_results(fun_defs: list[FunctionDefinition], tests: list[TestDefinit
     for test in tests[:]:
         try:
             log.info(f"processing prompt: {test.prompt}")
-            controller = AutomatonController(fun_defs=fun_defs, initial_prompt=test.prompt.encode())
+            controller = AutomatonController(fun_defs=fun_defs, value_buckets=value_buckets)
             if os.getenv("DEBUG") == "True":
                 json_obj = execute_with_dashboard(
                     model=model,
@@ -139,7 +145,7 @@ def generate_results(fun_defs: list[FunctionDefinition], tests: list[TestDefinit
     return outputs
 
 
-def write_outputs(output_path: str, outputs: list[dict[Any, Any]]) -> None:
+def write_outputs(output_path: Path, outputs: list[dict[Any, Any]]) -> None:
     """Write outputs"""
     log = get_logger()
     try:

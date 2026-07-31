@@ -1,10 +1,10 @@
+from typing import Any
+
 import numpy as np
 import numpy.typing as npt
 from rich.table import Table
 from rich.markup import escape
 from rich import print as rprint
-from llm_sdk import Small_LLM_Model
-from typing import Any
 
 from src.matcher import TokenMatcher
 from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
@@ -44,7 +44,7 @@ def debug_prompt(generated: str) -> None:
 
 
 def debug_decoded_candidates(context: str, id_to_bytes: dict[int, bytes], logits: npt.NDArray[np.int64],
-                             filtered_logits: npt.NDArray[np.int64], model: Small_LLM_Model) -> None:
+                             filtered_logits: npt.NDArray[np.int64]) -> None:
     """Print first candidate tokens"""
 
     if not IS_DEBUG:

@@ -48,50 +48,38 @@ def bytes_to_str(buf: bytes) -> str | None:
 # ==================
 
 
-def _build_string_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
-    """Precompute acceptable token ids for type string"""
-    ids = []
-    for t_id, t_b in dic_id_to_bytes.items():
-        if t_b.startswith(b'"') or b'"' not in t_b:
-            ids.append(t_id)
-    return ids
+_PARTIAL_NUM = re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
+
+PATTERNS = {
+    TypeDef.INTEGER:    re.compile(r'^[-+]?\d+$'),
+    TypeDef.FLOAT:      re.compile(r'^[-+]?\d+(\.\d+)$'),
+    TypeDef.NUMBER:     _PARTIAL_NUM,
+    TypeDef.BOOLEAN:    re.compile(r'^(true|false|t|tr|tru|f|fa|fal|fals)$'),
+    TypeDef.NULL:       re.compile(r'^(null|n|nu|nul)$'),
+}
 
 
-def _build_boolean_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
-    """Precompute acceptable token ids for type boolean"""
-    true_b, false_b = b"true", b"false"
-    ids = []
+def build_value_buckets(
+        dic_id_to_bytes: dict[int, bytes]
+) -> dict[TypeDef, set[int]]:
+    """Precomputes acceptable token ids for JSON types
+
+    Args:
+        dic_id_to_bytes (dict[int, bytes]): map of token ids to bytes
+
+    Returns:
+        dict[TypeDef, list[int]]: buckets
+    """
+    buckets: dict[TypeDef, set[int]] = {t: set() for t in TypeDef}
+
     for t_id, t_b in dic_id_to_bytes.items():
         s = bytes_to_str(t_b)
-        if s is None:
+        if not s:
             continue
-        if true_b.startswith(t_b) or false_b.startswith(t_b) or s in ("true", "false"):
-            ids.append(t_id)
-    return ids
-
-
-def _build_number_bucket(dic_id_to_bytes: dict[int, bytes]) -> list[int]:
-    """Precompute acceptable token ids for type number"""
-    NUMBER_TOKEN_RE = re.compile(r'^[-+0-9.eE]+$')
-    ids = []
-    for t_id, t_b in dic_id_to_bytes.items():
-        s = bytes_to_str(t_b)
-        if s and NUMBER_TOKEN_RE.match(s):
-            ids.append(t_id)
-    return ids
-
-
-def build_value_buckets(dic_id_to_bytes: dict[int, bytes]) -> dict[TypeDef, list[int]]:
-    """Precompute lists of acceptable token ids according to expected type"""
-    number_bucket = _build_number_bucket(dic_id_to_bytes)
-    boolean_bucket = _build_boolean_bucket(dic_id_to_bytes)
-    string_bucket = _build_string_bucket(dic_id_to_bytes)
-
-    return {
-        TypeDef.NUMBER: number_bucket,
-        TypeDef.BOOLEAN: boolean_bucket,
-        TypeDef.STRING: string_bucket
-    }
+        for type_def, pattern in PATTERNS.items():
+            if pattern.match(s):
+                buckets[type_def].add(t_id)
+    return buckets
 
 
 def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes], dict[int, str], dict[bytes, int]]:

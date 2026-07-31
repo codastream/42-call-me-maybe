@@ -12,7 +12,7 @@ class TokenMatcher(ABC):
 
     @abstractmethod
     def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                             value_buckets: dict[TypeDef, list[int]]) -> list[int]:
+                             value_buckets: dict[TypeDef, set[int]]) -> list[int]:
         """Filter token still acceptable given current buffer"""
 
     @abstractmethod

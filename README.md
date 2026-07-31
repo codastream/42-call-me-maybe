@@ -134,7 +134,7 @@ __boolean mask__ (chosen option)
 | Criteria | Treshold | All vocabulary |
 | --- | ---- | ----------------- |
 | JSON validity | 100% | 100% |
-| execution speed | < 300 s | 200 |
+| execution speed | < 300 s | 166 |
 | accuracy | > 90% | 100% |
 
 
@@ -175,6 +175,7 @@ __Challenge__ : Adapting the granularity level on which to apply constraints (by
 __Mitigation__ : 
 - comparison on byte sequences rather than character by character
 - caching dictionaries
+- forcing token ids on predictable sequences
 - prefiltering tokens ahead of looping through them : did not improve much, as we need to remain permissive in most of the cases
 
 ## Grokking the theory
@@ -295,6 +296,9 @@ make install
 
 # running program
 make run
+
+# running program step by step with debugging dashboard
+make run-steps
 
 # running tests
 make test
