@@ -5,7 +5,14 @@ class CustomUTF8Decoder:
         self.buffer = b""
 
     def decode(self, chunk: bytes) -> str:
-        """Decode while maintaining state in a buffer"""
+        """Decode while maintaining state in a buffer
+
+        Args:
+            chunk (bytes): new bytes to be appended
+
+        Returns:
+            str: decoded string
+        """
         self.buffer += chunk
         try:
             text = self.buffer.decode("utf-8")
@@ -15,7 +22,11 @@ class CustomUTF8Decoder:
             return ""
 
     def flush(self) -> str:
-        """To be called after generation to get potential orphan bytes"""
+        """To be called after generation to get potential orphan bytes
+
+        Returns:
+            str: remaining elements of buffer
+        """
         res = self.buffer.decode("utf-8", errors="replace")
         self.buffer = b""
         return res

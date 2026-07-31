@@ -1,5 +1,4 @@
 from typing import Any, List
-from dataclasses import dataclass
 
 from rich.layout import Layout
 from rich.panel import Panel
@@ -7,35 +6,16 @@ from rich.table import Table
 from rich.text import Text
 from rich.align import Align
 from rich.console import Console
-import numpy.typing as npt
-import numpy as np
 
 
 from src.matcher.AutomatonDef import AState
 from src.matcher.TokenMatcher import TokenMatcher
-from src.matcher.AutomatonController import AutomatonController
-
-
-@dataclass
-class DecodingStepState:
-    stat_loops: int
-    stat_top1_rejected_count: int
-    stat_top1_rejected_pct: float
-    stat_top_tokens_data: Any
-    stat_avg_rank: float
-    logits: npt.NDArray[np.int64]
-    filtered_logits: npt.NDArray[np.int64]
-    authorized_token_ids: list[int]
-    next_token_id: int
-    readable_chunk: str
-    old_generated: str
-    current_stage: str
-    controller: AutomatonController
-    tokenid_to_bytes: dict[int, bytes]
-    selected_ranks: list[int]
+from src.models.DecodingStepState import DecodingStepState
 
 
 class DebugDashboard:
+    """Dashboard for decoding process visualization
+    """
 
     def __init__(self, pipeline_stages: List[str]):
         """Initializer"""
@@ -45,7 +25,8 @@ class DebugDashboard:
         self._setup_layout()
 
     def _setup_layout(self) -> None:
-        """Declare layout"""
+        """Segment console screen"""
+
         h = self.console.size.height
         top_size = 5
         middle_size = 32
@@ -85,7 +66,12 @@ class DebugDashboard:
         )
 
     def _build_automaton_graph(self, current_stage: str) -> None:
-        """Display automaton states"""
+        """Display automaton states
+
+        Args:
+            current_stage (str): current stage
+        """
+
         graph = Text()
         for stage in self.stages:
             style = "bold black on yellow" if stage == current_stage\
@@ -102,7 +88,12 @@ class DebugDashboard:
         self.layout["automaton"].update(Panel(centered, title="Automaton Flow Graph", border_style="white"))
 
     def _build_matcher_status(self, active_pipeline: List[TokenMatcher], max_visible: int = 6) -> None:
-        """Display current matcher status"""
+        """Display current matcher status
+
+        Args:
+            active_pipeline (List[TokenMatcher]): list of matchers on stack
+            max_visible (int, optional): (deprecated) maximum number of visible elements
+        """
         stack_text = Text()
         visible = active_pipeline[-1:]
         for _, m in enumerate(active_pipeline):
@@ -120,12 +111,22 @@ class DebugDashboard:
         return int(item['rank'])
 
     def _build_logit_table(self, top_tokens: List[dict[str, Any]]) -> None:
-        """Display first logits and their masks"""
-        table = Table(box=None, show_header=True, header_style="bold cyan", expand=True)
-        table.add_column("Token", justify="left")
-        table.add_column("Logit", justify="right")
-        table.add_column("Filtered Logit", justify="right")
-        table.add_column("Rank", justify="right")
+        """Build a table with logits representation, weight, filtered weight and rank
+
+        Args:
+            top_tokens (List[dict[str, Any]]): first tokens
+        """
+        table = Table(box=None, show_header=True, header_style="bold cyan", expand=False)
+        w = self.console.width
+        left_w = (w * 5) // 7
+        w_token = int(left_w * 0.40)
+        w_logit = int(left_w * 0.20)
+        w_filtered = int(left_w * 0.20)
+        w_rank = left_w - (w_token + w_logit + w_filtered)
+        table.add_column("Token", justify="left", width=w_token, no_wrap=True)
+        table.add_column("Logit", justify="right", width=w_logit, no_wrap=True)
+        table.add_column("Filtered Logit", justify="right", width=w_filtered, no_wrap=True)
+        table.add_column("Rank", justify="right", width=w_rank, no_wrap=True)
 
         sorted_items = sorted(top_tokens, key=self._get_rank)
         first_token_rejected = False
@@ -155,7 +156,14 @@ class DebugDashboard:
     def _build_stats(self, loops: int, rejected_pct: float,
                      top1_rejected: int,
                      avg_rank: float) -> None:
-        """Display basic figures : loops, average selected rank and rejected first token"""
+        """Display decoding stats
+
+        Args:
+            loops (int): number of iterations
+            rejected_pct (float): % of rejected top-1 tokens
+            top1_rejected (int): nb of rejected top-1 tokens
+            avg_rank (float): average rank of selected token
+        """
 
         p_loops = Panel(
             Align(Text(str(loops), style="bold yellow"), align="center", vertical="middle"),
@@ -181,7 +189,11 @@ class DebugDashboard:
         self.layout["stat_avg_rank"].update(p_rank)
 
     def _build_help(self, step_hint: str = "") -> None:
-        """Display usage message"""
+        """Display usage message
+
+        Args:
+            step_hint (str, optional): usage hints. Defaults to "".
+        """
         if not step_hint:
             return
         help = Text()
@@ -190,14 +202,23 @@ class DebugDashboard:
         self.layout["help"].update(Panel(centered, title="Help", border_style="white"))
 
     def _build_logs(self, logs: list[str]) -> None:
-        """Display logs"""
+        """Display logs
+
+        Args:
+            logs (list[str]): logs
+        """
         if not logs:
             return
         log_content = Text("\n".join(logs), style="grey")
         self.layout["logs"].update(Panel(log_content, title="Logs", border_style="white"))
 
     def _build_generated(self, generated_text: str, added_text: str) -> None:
-        """Display generated JSON"""
+        """Display generated JSON
+
+        Args:
+            generated_text (str): part of the output already generated
+            added_text (str): new text chunk
+        """
         generated = Text(generated_text, style="green")
         generated.append(f"{added_text}", style="white on green")
 
@@ -207,25 +228,27 @@ class DebugDashboard:
                   border_style="white")
         )
 
-    def update(self, current_stage: str,
-               active_pipeline: List[Any],
-               top_tokens: List[dict[str, Any]],
-               loops: int,
-               rejected_pct: float,
-               top1_rejected: int,
-               avg_rank: float,
-               generated_text: str,
-               generated_added_text: str,
+    def update(self,
+               state: DecodingStepState,
                step_hint: str,
                logs: list[str]
                ) -> Layout:
-        """Update dashboard"""
+        """Update dashboard according to step state
 
-        self._build_automaton_graph(current_stage)
-        self._build_matcher_status(active_pipeline)
-        self._build_logit_table(top_tokens)
-        self._build_stats(loops, rejected_pct, top1_rejected, avg_rank)
-        self._build_generated(generated_text, generated_added_text)
+        Args:
+            state (DecodingStepState): step state
+            step_hint (str): dashboard usage note
+            logs (list[str]): logs
+
+        Returns:
+            Layout: updated layout
+        """
+        metrics = state.metrics
+        self._build_automaton_graph(state.current_stage)
+        self._build_matcher_status(state.active_pipeline)
+        self._build_logit_table(state.top_tokens_data)
+        self._build_stats(metrics.loops, metrics.top1_rejected_pct, metrics.top1_rejected_count, metrics.avg_rank)
+        self._build_generated(state.generated_text, state.readable_chunk)
         self._build_help(step_hint)
         self._build_logs(logs)
 

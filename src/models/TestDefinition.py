@@ -4,5 +4,9 @@ from src.models.validation import NonEmptyString
 
 
 class TestDefinition(BaseModel):
-    """Model for parsing a test definition"""
+    """Model for a test definition object
+
+    Args:
+        BaseModel : pydantic BaseModel
+    """
     prompt: NonEmptyString

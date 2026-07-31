@@ -6,15 +6,29 @@ from src.models.validation import NonEmptyString
 
 
 class ParameterDef(BaseModel):
+    """Model for a parameter object
+
+    Args:
+        BaseModel : pydantic BaseModel
+    """
     type: TypeDef
 
 
 class ReturnDef(BaseModel):
+    """Model for a returns object
+
+    Args:
+        BaseModel : pydantic BaseModel
+    """
     type: TypeDef
 
 
 class FunctionDefinition(BaseModel):
-    """Model for parsing function definitions"""
+    """Model of a function definition object
+
+    Args:
+        BaseModel : pydantic BaseModel
+    """
     name: NonEmptyString
     description: NonEmptyString
     parameters: Dict[NonEmptyString, ParameterDef] = Field(default_factory=dict)

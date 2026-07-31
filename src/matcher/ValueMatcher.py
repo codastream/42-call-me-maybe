@@ -33,7 +33,14 @@ class ValueMatcher(TokenMatcher):
 
     @staticmethod
     def _find_string_end(s: str) -> int:
-        """Return index of closing unescaped quote after pos 0, or -1"""
+        """Return index of last character for a string value
+
+        Args:
+            s (str): string to look upon
+
+        Returns:
+            int: index of closing unescaped quote after pos 0, or -1 if not found
+        """
         if not s or s[0] != '"':
             return -1
         i = 1
@@ -51,7 +58,14 @@ class ValueMatcher(TokenMatcher):
 
     @staticmethod
     def _count_unescaped_quotes(s: str) -> int:
-        """Count quotes not preceded by an odd number of backslashes"""
+        """Count quotes not preceded by an odd number of backslashes
+
+        Args:
+            s (str): string to look upon
+
+        Returns:
+            int: number of unescaped quotes
+        """
         count = 0
         i = 0
         while i < len(s):
@@ -78,7 +92,17 @@ class ValueMatcher(TokenMatcher):
             trie_root: TrieNode,
             value_buckets: dict[TypeDef, set[int]]
     ) -> set[int]:
-        """Filter the vocabulary tokens to iterate around"""
+        """Prefilter token ids candidates, to restrict the tokens to loop over during evaluation
+
+        Args:
+            current_buf (bytes): current buffer
+            token_id_to_bytes (dict[int, bytes]): map of token id to their bytes value
+            trie_root (TrieNode): a Trie of vocabulary
+            value_buckets (dict[TypeDef, set[int]]): preselected token ids grouped by type
+
+        Returns:
+            set[int]: filtered candidate token ids
+        """
         if not current_buf:
             log.debug("start of ValueMatcher, returning all allowed tokens for its type")
             return self.allowed_bucket
@@ -92,7 +116,17 @@ class ValueMatcher(TokenMatcher):
         return self.allowed_bucket
 
     def evaluate(self, buf: bytes) -> bool:
-        """Return True if buffer maintains type consistency for a non final value"""
+        """Return True if buffer maintains type consistency for a non final value and according to matcher type
+
+        Note:
+            consistency is evaluated wih regex
+
+        Args:
+            buf (bytes): buffer
+
+        Returns:
+            bool: True if current buffer can represent a value of the type of the matcher
+        """
         s = bytes_to_str(buf)
         if s is None:
             return False
@@ -116,16 +150,16 @@ class ValueMatcher(TokenMatcher):
 
         return False
 
-    def is_unambiguous_terminal(self, buf: bytes) -> bool:
-        """Return True if is_complete and type implies a recognizable end of value delimiter"""
-        if self.type == TypeDef.NUMBER or self.type == TypeDef.STRING:
-            return False
-        return self.is_complete(buf)
-
     def is_complete(self, buf: bytes) -> bool:
-        """Return True if buffer maintains type consistency for a final value"""
+        """Return True if buffer maintains type consistency for a final value
+
+        Args:
+            buf (bytes): buffer
+
+        Returns:
+            bool: True if complete
+        """
         s = bytes_to_str(buf)
-        # log.debug(f"is_complete: type={self.type} buf={buf!r} s={s!r} not_s={not s} len={len(s) if s else 'N/A'}")
         if not s:
             return False
         stripped = s.lstrip()
@@ -148,15 +182,30 @@ class ValueMatcher(TokenMatcher):
         return False
 
     def display_name(self) -> str:
-        """Get name"""
+        """Return human readable name of matcher
+
+        Returns:
+            str: name
+        """
         return "Value Matcher"
 
     def display_state(self) -> str:
-        """Get state"""
+        """Return human readable state of matcher with its type
+
+        Returns:
+            str: state
+        """
         return f"type : {self.type.name}"
 
     def leftover_bytes(self, buf: bytes) -> bytes:
-        """Return bytes not corresponding any more to the matcher"""
+        """Return bytes exceding the matcher, computed according to matcher type
+
+        Args:
+            buf (bytes): buffer
+
+        Returns:
+            bytes: leftover
+        """
 
         s = bytes_to_str(buf)
         if not s:

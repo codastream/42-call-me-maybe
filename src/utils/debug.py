@@ -1,4 +1,3 @@
-from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -6,7 +5,6 @@ from rich.table import Table
 from rich.markup import escape
 from rich import print as rprint
 
-from src.matcher import TokenMatcher
 from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
 
 
@@ -14,28 +12,12 @@ IS_DEBUG = True
 PIPELINE_STAGES = ["FUN_NAME", "PARAM_PREFIX", "PARAM_KEY_OR_VAL", "CLOSE"]
 
 
-def debug_stack(matcher: Any) -> None:
-    """Print matcher pipeline"""
-
-    if not IS_DEBUG:
-        return
-    if hasattr(matcher, "pipeline"):
-        pipeline: list[TokenMatcher] = matcher.pipeline
-    rprint("Expected constraints")
-    for m in pipeline:
-        rprint("[white]---[/white]")
-        if hasattr(m, "acceptable_targets"):
-            for t in m.acceptable_targets:
-                print(f"{t}")
-        elif hasattr(m, "_allowed_keys"):
-            for p in m._allowed_keys():
-                print(f"{p}")
-        elif hasattr(m, "target"):
-            print(f"{m.target}")
-
-
 def debug_prompt(generated: str) -> None:
-    """Print constructed prompt"""
+    """Print generated text
+
+    Args:
+        generated (str): whole generated text
+    """
     if not IS_DEBUG:
         return
     content_start_idx = generated.index('"prompt":')
@@ -45,7 +27,14 @@ def debug_prompt(generated: str) -> None:
 
 def debug_decoded_candidates(context: str, id_to_bytes: dict[int, bytes], logits: npt.NDArray[np.int64],
                              filtered_logits: npt.NDArray[np.int64]) -> None:
-    """Print first candidate tokens"""
+    """Print an array of candidate tokens
+
+    Args:
+        context (str): state of the automaton
+        id_to_bytes (dict[int, bytes]): mapping of token ids to bytes
+        logits (npt.NDArray[np.int64]): array of token ids scores
+        filtered_logits (npt.NDArray[np.int64]): array of token ids scores after applying mask
+    """
 
     if not IS_DEBUG:
         return
@@ -89,10 +78,3 @@ def debug_decoded_candidates(context: str, id_to_bytes: dict[int, bytes], logits
         table.add_row(repr_display, logit_display, filtered_logit_display, str(t_id))
 
     rprint(table)
-
-
-def debug_title(name: str) -> None:
-    """Print with special title format"""
-    if not IS_DEBUG:
-        return
-    rprint(f"\n[bold yellow on black] === { name.upper() } === [/bold yellow on black]\n")

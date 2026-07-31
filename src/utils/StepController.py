@@ -17,7 +17,14 @@ class StepController:
         self._advance: int = 0
 
     def _read_key(self) -> str:
-        """Read key from /dev/tty"""
+        """Read key from /dev/tty
+
+        Raises:
+            KeyboardInterrupt: when CTRL+C is pressed
+
+        Returns:
+            str: lower character corresponding to pressed key
+        """
         with open("/dev/tty", "rb", buffering=0) as fd:
             fileno = fd.fileno()
             old_settings = termios.tcgetattr(fileno)
@@ -31,7 +38,8 @@ class StepController:
         return ch.lower()
 
     def wait(self) -> None:
-        """Block execution till a command is pressed"""
+        """Block execution till a command is pressed
+        """
 
         if self._advance > 0:
             self._advance -= 1

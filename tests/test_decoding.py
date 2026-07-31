@@ -9,8 +9,10 @@ from typing import Any, Callable
 from pydantic import TypeAdapter
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
-from src.matcher import AutomatonController
-from src.models import FunctionDefinition, TestDefinition
+from src.matcher.AutomatonController import AutomatonController
+from src.models.FunctionDefinition import FunctionDefinition
+from src.models.TestDefinition import TestDefinition
+from src.models.DecodingContext import DecodingContext
 from src.models.TypeDef import TypeDef
 from src.utils.convert import extract_and_cache_vocabulary, build_value_buckets
 from src.utils.Trie import TrieNode
@@ -87,15 +89,19 @@ def make_test_method(test_definition: TestDefinition) -> Callable[[Any], None]:
 
             controller = AutomatonController(fun_defs=self.fun_defs, value_buckets=self.value_buckets)
 
-            received_json = execute_decoding(
+            context = DecodingContext(
                 model=self.model,
                 tokenid_to_bytes=self.TOKENID_TO_BYTES,
                 tokenbytes_to_id=self.BYTES_TO_TOKENID,
-                current_prompt=current_prompt,
-                available_fun=self.available_fun,
-                controller=controller,
                 trie_root=self.trie_root,
                 value_buckets=self.value_buckets,
+                controller=controller,
+                current_prompt=current_prompt,
+                available_fun=self.available_fun
+            )
+
+            received_json = execute_decoding(
+                ctx=context,
                 timeout=self.timeout_limit,
                 is_debug=False
             )

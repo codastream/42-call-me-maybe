@@ -11,6 +11,9 @@ def _build_base_printable_mappings() -> Tuple[dict[int, str], dict[str, int]]:
     Maintain a list of bytes and chars that are zipped into a dict
     First, list bytes already having a printable value
     Then generate a guaranted printable value (starting with Unicode 256 = Ā) for remaining ones
+
+    Returns:
+        Tuple[dict[int, str], dict[str, int]]: mappings of byte to its representaton and reverse mapping
     """
 
     printables = list(range(ord("!"), ord("~") + 1)) + \
@@ -37,7 +40,14 @@ BYTE_TO_PRINTABLE, PRINTABLE_TO_BYTE = _build_base_printable_mappings()
 
 
 def bytes_to_str(buf: bytes) -> str | None:
-    """Return decoded bytes to UTF-8 string"""
+    """Return decoded bytes to UTF-8 string
+
+    Args:
+        buf (bytes): buffer
+
+    Returns:
+        str | None: decoded bytes or None when a decode error occurred
+    """
     try:
         return buf.decode('utf-8', errors='surrogateescape')
     except Exception:
@@ -83,11 +93,18 @@ def build_value_buckets(
 
 
 def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes], dict[int, str], dict[bytes, int]]:
-    """Extract vocabulary
+    """Extract vocabulary and build mappings to be cached
+
+
+    Args:
+        vocab_file_path (str): vocabulary file path
 
     Raises:
       ValueError when json cannot be decoded
-      RuntimeError in case of unknown error
+      Exception in case of unknown error
+
+    Returns:
+        Tuple[dict[int, bytes], dict[int, str], dict[bytes, int]]: mappings
     """
     try:
         with open(vocab_file_path, "r", encoding="utf-8") as vocab_file:
@@ -114,7 +131,14 @@ def extract_and_cache_vocabulary(vocab_file_path: str) -> Tuple[dict[int, bytes]
 
 
 def convert_token_str_to_bytes(token_str: str) -> bytes:
-    """Convert a vocab token to real bytes"""
+    """Convert a vocab token to real bytes
+
+    Args:
+        token_str (str): human_readable string
+
+    Returns:
+        bytes: bytes that can be decoded by model
+    """
     return bytes(PRINTABLE_TO_BYTE[c] for c in token_str)
 
 

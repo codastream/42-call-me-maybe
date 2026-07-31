@@ -9,6 +9,7 @@ log = get_logger("match")
 
 
 class TokenMatcher(ABC):
+    """Main contract for TokenMatcher"""
 
     @abstractmethod
     def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
@@ -25,16 +26,35 @@ class TokenMatcher(ABC):
 
     @abstractmethod
     def display_name(self) -> str:
-        """Display matcher name"""
+        """Return human readable name of matcher
+
+        Returns:
+            str: name
+        """
 
     @abstractmethod
     def display_state(self) -> str:
-        """Display matcher state"""
+        """Return human readable state of matcher
+
+        Returns:
+            str: state
+        """
 
     def commit(self, buf: bytes) -> None:
-        """Define buffer as the valid. Should be called for the chosen token only"""
+        """Define buffer as the valid. Should be called for the chosen token only
+
+        Args:
+            buf (bytes): bytes to register in matcher state
+        """
         return None
 
     @abstractmethod
     def leftover_bytes(self, buf: bytes) -> bytes:
-        """Return bytes not corresponding any more to the matcher"""
+        """Return exceding bytes for the matcher
+
+        Args:
+            buf (bytes): buffer
+
+        Returns:
+            bytes: leftover
+        """

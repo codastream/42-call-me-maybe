@@ -17,6 +17,17 @@ class AppConfig(BaseModel):
 
     @field_validator("functions_definition_file", "input_file", "output_file", mode="before")
     def clean_and_check_extension(cls, v: str) -> Path:
+        """validate json file extension
+
+        Args:
+            v (str): value
+
+        Raises:
+            ValueError: when suffix is not .json
+
+        Returns:
+            Path: verified path
+        """
         v = v.strip()
         path = Path(v)
         if path.suffix != ".json":
@@ -25,6 +36,15 @@ class AppConfig(BaseModel):
 
     @model_validator(mode='after')
     def validate_output_and_create_dir(self) -> "AppConfig":
+        """validate output path on model instanciation
+
+        Raises:
+            ValueError: when path corresponds to a directory
+            ValueError: when no write permission on path or parent directory
+
+        Returns:
+            AppConfig: validated arguments
+        """
         out = self.output_file
 
         try:
