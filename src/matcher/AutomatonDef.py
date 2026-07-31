@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 class AState(Enum):
     FUN_NAME_VAL = auto()
+    EMPTY_PARAMS_AND_CLOSE = auto()
     PARAMS_OBJ_KEY = auto()
     PARAM_KEY = auto()
     PARAM_VAL = auto()
@@ -18,10 +19,11 @@ class Transition:
 
 
 AUTOMATON: dict[AState, Transition] = {
-    AState.FUN_NAME_VAL: Transition("Function name (val)", AState.PARAMS_OBJ_KEY),
-    AState.PARAMS_OBJ_KEY: Transition("Function name (key)", AState.PARAM_KEY),
+    AState.FUN_NAME_VAL: Transition("Function name (val)", None),
+    AState.EMPTY_PARAMS_AND_CLOSE: Transition("No params", AState.FINISH),
+    AState.PARAMS_OBJ_KEY: Transition("Params", AState.PARAM_KEY),
     AState.PARAM_KEY: Transition("Param (key)", AState.PARAM_VAL),
-    AState.PARAM_VAL: Transition("Param (key)", None),
+    AState.PARAM_VAL: Transition("Param (val)", None),
     AState.CLOSE: Transition("Close", AState.FINISH),
     AState.FINISH: Transition("Finish", None),
 }

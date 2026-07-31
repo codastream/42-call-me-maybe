@@ -13,9 +13,23 @@ log = get_logger("match")
 class ValueMatcher(TokenMatcher):
     """Check that the buffer maintains type consistency"""
 
-    _PARTIAL_NUM_RE = re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
-    _FULL_NUM_RE = re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$')
-    _EXTRACT_NUM_RE = re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?')
+    PARTIAL_NUM_PATTERNS = {
+        TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]*$'),
+        TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]*\.?[0-9]*$'),
+        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
+    }
+
+    FULL_NUM_PATTERNS = {
+        TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]+$'),
+        TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]+\.[0-9]+$'),
+        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+(\.?[0-9]+)?([eE][-+]?[0-9]+)?$')
+    }
+
+    EXTRACT_NUM_PATTERNS = {
+        TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]+'),
+        TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]+\.[0-9]+'),
+        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?')
+    }
 
     @staticmethod
     def _find_string_end(s: str) -> int:
@@ -63,19 +77,19 @@ class ValueMatcher(TokenMatcher):
             token_id_to_bytes: dict[int, bytes],
             trie_root: TrieNode,
             value_buckets: dict[TypeDef, set[int]]
-    ) -> list[int]:
+    ) -> set[int]:
         """Filter the vocabulary tokens to iterate around"""
-        if self.is_complete(current_buf):
-            return list(token_id_to_bytes.keys())
-
-        if self.type == TypeDef.STRING and current_buf:
-            return list(token_id_to_bytes.keys())
-
         if not current_buf:
             log.debug("start of ValueMatcher, returning all allowed tokens for its type")
-            return list(self.allowed_bucket)
+            return self.allowed_bucket
 
-        return list(self.allowed_bucket)
+        if self.is_complete(current_buf):
+            return self.allowed_bucket
+
+        if self.type == TypeDef.STRING or self.type in (TypeDef.INTEGER, TypeDef.FLOAT, TypeDef.NUMBER):
+            return set(token_id_to_bytes.keys())
+
+        return self.allowed_bucket
 
     def evaluate(self, buf: bytes) -> bool:
         """Return True if buffer maintains type consistency for a non final value"""
@@ -86,11 +100,11 @@ class ValueMatcher(TokenMatcher):
         if not stripped:
             return True
 
-        if self.type == TypeDef.NUMBER:
-            return bool(self._PARTIAL_NUM_RE.match(stripped))
+        if self.type == TypeDef.INTEGER or self.type == TypeDef.FLOAT or self.type == TypeDef.NUMBER:
+            return bool(self.PARTIAL_NUM_PATTERNS[self.type].match(stripped))
 
         if self.type == TypeDef.BOOLEAN:
-            return "true".startswith(s) or "false".startswith(stripped)
+            return "true".startswith(stripped) or "false".startswith(stripped)
 
         if self.type == TypeDef.STRING:
             if stripped[0] != '"':
@@ -117,10 +131,11 @@ class ValueMatcher(TokenMatcher):
         stripped = s.lstrip()
         if not stripped:
             return False
-        if self.type == TypeDef.NUMBER:
-            if bool(self._FULL_NUM_RE.match(stripped)):
+
+        if self.type == TypeDef.INTEGER or self.type == TypeDef.FLOAT or self.type == TypeDef.NUMBER:
+            if bool(self.FULL_NUM_PATTERNS[self.type].match(stripped)):
                 return True
-            match = self._EXTRACT_NUM_RE.match(stripped)
+            match = self.EXTRACT_NUM_PATTERNS[self.type].match(stripped)
             return match is not None and len(match.group(0)) > 0
 
         if self.type == TypeDef.BOOLEAN:
@@ -154,9 +169,9 @@ class ValueMatcher(TokenMatcher):
                     return buf[idx + len(keyword):]
             return b""
 
-        if self.type == TypeDef.NUMBER:
+        if self.type == TypeDef.INTEGER or self.type == TypeDef.FLOAT or self.type == TypeDef.NUMBER:
             stripped = s.lstrip()
-            match = self._EXTRACT_NUM_RE.match(s)
+            match = self.EXTRACT_NUM_PATTERNS[self.type].match(stripped)
             if not match:
                 return b""
             matched_text = match.group(0)

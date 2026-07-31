@@ -17,9 +17,9 @@ def check_format(path: Path, adapter: TypeAdapter[T]) -> T:
         with open(path, "r") as file:
             raw = json.load(file)
             return adapter.validate_python(raw)
-    except json.JSONDecodeError:
-        raise ValueError(f"Error: {path} does not have a valid JSON structure.")
-    except ValidationError:
-        raise ValueError(f"Error: {path} does not match function definition schema.")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Error: {path} does not have a valid JSON structure : {e}")
+    except ValidationError as e:
+        raise ValueError(f"Error: {path} does not match function definition schema : {e}")
     except Exception as e:
         raise ValueError(f"Unexpected error while reading {path} : {e}")

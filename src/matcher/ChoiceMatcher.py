@@ -11,13 +11,13 @@ class ChoiceMatcher(TokenMatcher):
         self.matched_target: bytes | None = None
 
     def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                             value_buckets: dict[TypeDef, set[int]]) -> list[int]:
+                             value_buckets: dict[TypeDef, set[int]]) -> set[int]:
         ids: set[int] = set()
         for target in self.acceptable_targets:
             if target.startswith(current_buf):
                 remaining = target[len(current_buf):]
                 ids.update(trie_root.get_token_ids_for_remaining(remaining))
-        return list(ids)
+        return ids
 
     def evaluate(self, buf: bytes) -> bool:
         """Return True if at least one target starts with buffer"""

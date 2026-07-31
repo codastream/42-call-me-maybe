@@ -10,9 +10,9 @@ class StaticSequenceMatcher(TokenMatcher):
         self.target = target
 
     def prefilter_candidates(self, current_buf: bytes, token_id_to_bytes: dict[int, bytes], trie_root: TrieNode,
-                             value_buckets: dict[TypeDef, set[int]]) -> list[int]:
+                             value_buckets: dict[TypeDef, set[int]]) -> set[int]:
         remaining = self.target[len(current_buf):]
-        return trie_root.get_token_ids_for_remaining(remaining)
+        return set(trie_root.get_token_ids_for_remaining(remaining))
 
     def evaluate(self, buf: bytes) -> bool:
         return self.target.startswith(buf)

@@ -1,4 +1,5 @@
 
+
 from src.matcher.TokenMatcher import TokenMatcher
 from src.matcher.StaticSequenceMatcher import StaticSequenceMatcher
 from src.matcher.ChoiceMatcher import ChoiceMatcher
@@ -52,7 +53,11 @@ class AutomatonController:
     def _remaining_keys(self) -> list[str]:
         """Return remaing param keys to evaluate"""
         if self.selected_function:
-            return [k for k in self.selected_function.parameters if k not in self.evaluated_params]
+            return [
+                k for k in self.selected_function.parameters
+                if k not in self.evaluated_params
+                and k != self.selected_param_key
+            ]
         return []
 
     def _get_next_possible_key_matchers(self) -> list[bytes]:
@@ -70,23 +75,25 @@ class AutomatonController:
 
     def _build_matcher_for_state(self, state: AState) -> TokenMatcher | None:
         """return a matcher according to state"""
-        next_matcher: TokenMatcher | None = None
+        matcher: TokenMatcher | None = None
         match state:
             case AState.FUN_NAME_VAL:
                 names = [f.name.encode() for f in self.fun_defs]
-                next_matcher = ChoiceMatcher(names)
+                matcher = ChoiceMatcher(names)
+            case AState.EMPTY_PARAMS_AND_CLOSE:
+                matcher = StaticSequenceMatcher(b'", "parameters": {}}')
             case AState.PARAMS_OBJ_KEY:
-                next_matcher = StaticSequenceMatcher(b'", "parameters": {')
+                matcher = StaticSequenceMatcher(b'", "parameters": {')
             case AState.PARAM_KEY:
                 targets = self._get_next_possible_key_matchers()
-                next_matcher = ChoiceMatcher(targets)
+                matcher = ChoiceMatcher(targets)
             case AState.PARAM_VAL:
                 if self.selected_function and self.selected_param_key:
                     p_type = self.selected_function.parameters[self.selected_param_key].type
-                    next_matcher = ValueMatcher(p_type, self.value_buckets)
+                    matcher = ValueMatcher(p_type, self.value_buckets)
             case AState.CLOSE:
-                next_matcher = ChoiceMatcher([b'}}', b' }}', b'}', b' }'])
-        return next_matcher
+                matcher = ChoiceMatcher([b'}}', b' }}', b'}', b' }'])
+        return matcher
 
     def _push_next(self) -> None:
         """Decide which matcher should go on stack"""
@@ -103,6 +110,11 @@ class AutomatonController:
                 self.evaluated_params.add(self.selected_param_key)
             self.selected_param_key = None
             self.state = AState.PARAM_KEY if self._remaining_keys() else AState.CLOSE
+        elif self.state == AState.FUN_NAME_VAL:
+            if self.selected_function and self.selected_function.parameters:
+                self.state = AState.PARAMS_OBJ_KEY
+            else:
+                self.state = AState.EMPTY_PARAMS_AND_CLOSE
         else:
             next_state = AUTOMATON[self.state].next
             if next_state is None:
@@ -116,25 +128,37 @@ class AutomatonController:
                 self.state = AState.FINISH
                 self.current_buffer_b = b""
                 return
-
+            self.log.debug(
+                f"""advanced to :\t{self.state.name}""")
         self.current_buffer_b = leftover
         if self.state != AState.FINISH:
             self._push_next()
 
-    def _get_next_matcher_after_value(self) -> TokenMatcher:
+    def _get_next_matcher_after_value(self) -> TokenMatcher | None:
         """Peek next possible matcher"""
-        next_targets = [k for k in self._remaining_keys() if k != self.selected_param_key]
-        if next_targets:
-            targets = self._get_next_possible_key_matchers()
-            return ChoiceMatcher(targets)
+        if len(self._remaining_keys()) > 0:
+            return self._build_matcher_for_state(AState.PARAM_KEY)
         else:
-            return ChoiceMatcher([b'}}', b' }}', b'}', b' }'])
+            return self._build_matcher_for_state(AState.CLOSE)
+
+    def _get_next_matcher_after_fun_name(self) -> TokenMatcher | None:
+        """Return matcher for dynamic transition after function name
+
+        Returns:
+            TokenMatcher: StaticSequenceMatcher till either first param key or end of json
+        """
+        if self.selected_function and not self.selected_function.parameters:
+            return self._build_matcher_for_state(AState.EMPTY_PARAMS_AND_CLOSE)
+        else:
+            return self._build_matcher_for_state(AState.PARAMS_OBJ_KEY)
 
     def _get_next_matcher(self) -> TokenMatcher | None:
         """Peek dynamical transition if ValueMatcher else return next"""
         if self.state == AState.PARAM_VAL:
             return self._get_next_matcher_after_value()
         next_state = AUTOMATON[self.state].next
+        if self.state == AState.FUN_NAME_VAL:
+            return self._get_next_matcher_after_fun_name()
         if next_state is None:
             return None
         return self._build_matcher_for_state(next_state)
@@ -148,6 +172,7 @@ class AutomatonController:
     def evaluate_tokens(self, tokenid_to_bytes: dict[int, bytes], trie_root: TrieNode,
                         value_buckets: dict[TypeDef, set[int]]) -> list[int]:
         """Prefilter and evaluate token against current state"""
+        log.debug("[blue]evaluate_tokens[/blue]")
         top = self._top
         if top is None:
             return []
@@ -159,6 +184,15 @@ class AutomatonController:
                 trie_root=trie_root,
                 value_buckets=value_buckets
             )
+            has_remaining_keys: bool = len(self._remaining_keys()) > 0
+            if isinstance(top, ValueMatcher):
+                log.debug(f"len of prefiltered for value matcher is {len(candidates_ids)}")
+                for t_id, t_b in tokenid_to_bytes.items():
+                    stripped_b = t_b.strip()
+                    if has_remaining_keys and stripped_b.startswith(b','):
+                        candidates_ids.add(t_id)
+                    elif stripped_b.startswith(b'}'):
+                        candidates_ids.add(t_id)
 
             valid_t_ids = []
             for t_id in candidates_ids:
@@ -203,6 +237,7 @@ class AutomatonController:
         """Add token bytes to buffer"""
 
         pending_bytes = token_b
+        log.debug("[blue]consume_token_bytes[/blue]")
 
         while not self.is_finished:
             top = self._top
@@ -242,16 +277,6 @@ class AutomatonController:
                         continue
                 break
 
-            # case buf '34' + token '}' - way to detect end of ValueMatcher
-            elif top.is_complete(self.current_buffer_b):
-                self.current_buffer_b = combined_buf
-                top.commit(self.current_buffer_b)
-                self.log.debug(f"consume:\t{top.__class__.__name__} completed. Advancing state")
-
-                self.pipeline.pop(0)
-                self._advance_state(leftover=b"")
-                continue
-
             # case buf '3' + token '4}' - another way to detect end of ValueMatcher
             elif top.is_complete(combined_buf):
                 leftover = top.leftover_bytes(combined_buf)
@@ -261,12 +286,29 @@ class AutomatonController:
                 top.commit(self.current_buffer_b)
                 self.log.debug(
                     f"""consume:\t{top.__class__.__name__} completed.
+                    Committing current buffer + part of pending bytes
                     consumed: {consumed_part!r}
-                    leftover: {leftover!r}.
-                    Advancing state""")
+                    Advancing state
+                    leftover transferred as buffer of next state : {leftover!r}.
+                    """)
                 self.pipeline.pop(0)
                 self._advance_state(leftover=leftover)
                 pending_bytes = b""
+                continue
+
+            # case buf '34' + token '}' - way to detect end of ValueMatcher
+            elif top.is_complete(self.current_buffer_b):
+                # self.current_buffer_b = combined_buf
+                top.commit(self.current_buffer_b)
+                self.log.debug(
+                    f"""consume:\t{top.__class__.__name__} completed.
+                    Committing current buffer only. Ignoring pending bytes.
+                    consumed: {self.current_buffer_b!r}
+                    Advancing state
+                    pending transferred as buffer of next state : {pending_bytes!r}.
+                    """)
+                self.pipeline.pop(0)
+                self._advance_state(leftover=pending_bytes)
                 continue
 
             # should not happen

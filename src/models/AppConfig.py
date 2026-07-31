@@ -15,7 +15,7 @@ class AppConfig(BaseModel):
     input_file: FilePath = Field(..., alias="input")
     output_file: Path = Field(..., alias="output")
 
-    @field_validator("functions_definition_file", "input_file", mode="before")
+    @field_validator("functions_definition_file", "input_file", "output_file", mode="before")
     def clean_and_check_extension(cls, v: str) -> Path:
         v = v.strip()
         path = Path(v)
@@ -27,14 +27,14 @@ class AppConfig(BaseModel):
     def validate_output_and_create_dir(self) -> "AppConfig":
         out = self.output_file
 
-        if out.is_dir():
-            raise ValueError(f"output path is a directory: {out}")
-        out_dir = out.parent
-        if not out_dir.exists():
-            try:
+        try:
+            if out.is_dir():
+                raise ValueError(f"output path is a directory: {out}")
+            out_dir = out.parent
+            if not out_dir.exists():
                 out_dir.mkdir(parents=True, exist_ok=True)
-            except PermissionError:
-                raise ValueError(f"cannot create output directory {out_dir}")
-        if not os.access(out_dir, os.W_OK):
-            raise ValueError(f"{out} has no write permission")
+            if not os.access(out_dir, os.W_OK):
+                raise ValueError(f"{out} has no write permission")
+        except PermissionError:
+            raise ValueError(f"no permission for output path {out} or its parent directory")
         return self
