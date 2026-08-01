@@ -134,9 +134,10 @@ __boolean mask__ (chosen option)
 | Criteria | Treshold | All vocabulary |
 | --- | ---- | ----------------- |
 | JSON validity | 100% | 100% |
-| execution speed | < 300 s | 166 |
+| execution speed | < 300 s | 280 |
 | accuracy | > 90% | 100% |
 
+Performance vary according to settings: for instance, interpreting `number` as `float` to comply with project evaluation has increased evaluation time for test by 20 sec, as it requires at least 2 more iterations per argument.
 
 # Challenges faced
 
@@ -283,6 +284,7 @@ Promising features : `rich.traceback` to get structured traceback messages integ
 - __code generation__ for repetitive tasks, as well as to provide a first example of a working setup when none was discovered (ie : state checking in a state machine)
 - __feedback on code__ on generated code (_evaluate code quality and assess performance, security. If it does not meet requirements, prioritize tasks for its refactoring_)
 - __debugging__ (_what is the cause of such error ? how to debug ? is it A, B or another ?_)
+- __documentation__ (_make PEP 257 Google style docstring for this class_)
 
 # Example usage
 

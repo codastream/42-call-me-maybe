@@ -58,12 +58,12 @@ def bytes_to_str(buf: bytes) -> str | None:
 # ==================
 
 
-_PARTIAL_NUM = re.compile(r'^\s*[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
+# _PARTIAL_NUM = re.compile(r'^\s*[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
 
 PATTERNS = {
     TypeDef.INTEGER:    re.compile(r'^\s*[-+]?\d+$'),
-    TypeDef.FLOAT: re.compile(r'^\s*[-+]?\d+\.?\d*([eE][-+]?\d*)?$'),
-    TypeDef.NUMBER:     _PARTIAL_NUM,
+    TypeDef.FLOAT:      re.compile(r'^\s*[-+]?\d+\.?\d*([eE][-+]?\d*)?$'),
+    TypeDef.NUMBER:     re.compile(r'^\s*[-+]?\d+\.?\d*([eE][-+]?\d*)?$'),
     TypeDef.BOOLEAN:    re.compile(r'^\s*(true|false|t|tr|tru|f|fa|fal|fals)$'),
     TypeDef.NULL:       re.compile(r'^\s*(null|n|nu|nul)$'),
 }

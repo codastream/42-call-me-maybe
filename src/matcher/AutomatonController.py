@@ -132,7 +132,7 @@ class AutomatonController:
                     p_type = self.selected_function.parameters[self.selected_param_key].type
                     matcher = ValueMatcher(p_type, self.value_buckets)
             case AState.CLOSE:
-                matcher = ChoiceMatcher([b'}}', b' }}', b'}', b' }'])
+                matcher = ChoiceMatcher([b'}}', b' }}'])
         return matcher
 
     def _push_next(self) -> None:
@@ -295,6 +295,7 @@ class AutomatonController:
             return False
 
         combined_buf = self.current_buffer_b + token_b
+        combined_buf = getattr(top, "_normalize", lambda b: b)(combined_buf)
         if top.evaluate(combined_buf):
             return True
 
@@ -334,6 +335,7 @@ class AutomatonController:
                 return
 
             combined_buf = self.current_buffer_b + pending_bytes
+            combined_buf = getattr(top, "_normalize", lambda b: b)(combined_buf)
             self.log.debug(f"""consume :\tstate = {self.state_label}
             \tself.current_buffer_b = {self.current_buffer_b!r}
             \tpending_bytes = {pending_bytes!r}

@@ -290,6 +290,34 @@ def _add_expected_sequence(
     return True, target_text
 
 
+def normalize_chunk_and_consume_bytes(
+    ctx: DecodingContext,
+    next_token_id: int,
+    custom_utf8_decoder: CustomUTF8Decoder
+) -> str:
+    """normalize generated chunk
+
+    Args:
+        ctx (DecodingContext): decoding context
+        token_b (bytes): token bytes
+
+    Returns:
+        str: clean chunk
+    """
+    top_before = ctx.controller._top
+    buf_before = ctx.controller.current_buffer_b
+    token_b = ctx.tokenid_to_bytes[next_token_id]
+    normalized_b = token_b
+    normalize_fn = getattr(top_before, "_normalize", None)
+    if normalize_fn:
+        normalized_combined = normalize_fn(buf_before + token_b)
+        if normalized_combined != buf_before + token_b:
+            normalized_b = normalized_combined[len(buf_before):]
+    ctx.controller.consume_token_bytes(token_b)
+    readable_chunk = custom_utf8_decoder.decode(normalized_b)
+    return readable_chunk
+
+
 def execute_decoding(
     ctx: DecodingContext,
     timeout: float = 10.0,
@@ -355,11 +383,9 @@ def execute_decoding(
         filtered_logits = logits + mask
 
         next_token_id = int(np.argmax(filtered_logits))
-
         input_ids.append(next_token_id)
-        token_bytes = ctx.tokenid_to_bytes[next_token_id]
-        ctx.controller.consume_token_bytes(token_bytes)
-        readable_chunk = custom_utf8_decoder.decode(token_bytes)
+
+        readable_chunk = normalize_chunk_and_consume_bytes(ctx, next_token_id, custom_utf8_decoder)
 
         if is_debug:
             metrics.loops += 1

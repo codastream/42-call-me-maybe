@@ -16,19 +16,22 @@ class ValueMatcher(TokenMatcher):
     PARTIAL_NUM_PATTERNS = {
         TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]*$'),
         TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]*\.?[0-9]*$'),
-        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
+        TypeDef.NUMBER:      re.compile(r'^[-+]?[0-9]*\.?[0-9]*$'),
+        # TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]*\.?[0-9]*([eE][-+]?[0-9]*)?$')
     }
 
     FULL_NUM_PATTERNS = {
         TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]+$'),
         TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]+\.[0-9]+$'),
-        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+(\.?[0-9]+)?([eE][-+]?[0-9]+)?$')
+        TypeDef.NUMBER:      re.compile(r'^[-+]?[0-9]+\.[0-9]+$'),
+        # TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+(\.?[0-9]+)?([eE][-+]?[0-9]+)?$')
     }
 
     EXTRACT_NUM_PATTERNS = {
         TypeDef.INTEGER:    re.compile(r'^[-+]?[0-9]+'),
         TypeDef.FLOAT:      re.compile(r'^[-+]?[0-9]+\.[0-9]+'),
-        TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?')
+        TypeDef.NUMBER:      re.compile(r'^[-+]?[0-9]+\.[0-9]+'),
+        # TypeDef.NUMBER:     re.compile(r'^[-+]?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?')
     }
 
     @staticmethod
@@ -85,6 +88,26 @@ class ValueMatcher(TokenMatcher):
         self.type = type_def
         self.allowed_bucket: set[int] = value_buckets.get(type_def, set())
 
+    def _normalize(self, buf: bytes) -> bytes:
+        """Strip BPE generated spaces immediately after opening quote
+        of a STRING value
+
+        Note:
+            Only fires after '"' before ant real content
+
+        Args:
+            buf (bytes): buffer
+
+        Returns:
+            bytes: normalized buffer
+        """
+        if self.type != TypeDef.STRING:
+            return buf
+        s = bytes_to_str(buf)
+        if s and len(s) >= 2 and s[0] == '"' and s[1] in (' '):
+            return (s[0] + s[2:]).encode(errors="surrogateescape")
+        return buf
+
     def prefilter_candidates(
             self,
             current_buf: bytes,
@@ -127,6 +150,7 @@ class ValueMatcher(TokenMatcher):
         Returns:
             bool: True if current buffer can represent a value of the type of the matcher
         """
+        buf = self._normalize(buf)
         s = bytes_to_str(buf)
         if s is None:
             return False
@@ -159,6 +183,7 @@ class ValueMatcher(TokenMatcher):
         Returns:
             bool: True if complete
         """
+        buf = self._normalize(buf)
         s = bytes_to_str(buf)
         if not s:
             return False
@@ -206,7 +231,7 @@ class ValueMatcher(TokenMatcher):
         Returns:
             bytes: leftover
         """
-
+        buf = self._normalize(buf)
         s = bytes_to_str(buf)
         if not s:
             return b""
