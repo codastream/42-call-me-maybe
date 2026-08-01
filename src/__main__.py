@@ -20,9 +20,9 @@ import time
 import os
 import traceback
 
-from typing import Tuple, Any
+from typing import Tuple, Any, Annotated
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter, ValidationError, Field
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -68,8 +68,10 @@ def validate_schema(defs_path: Path, input_path: Path) -> Tuple[list[FunctionDef
         SystemExit: If JSON content fails schema validation.
     """
     log = get_logger()
-    functions_list_adapter = TypeAdapter(list[FunctionDefinition])
-    tests_list_adapter = TypeAdapter(list[TestDefinition])
+    NonEmptyFunctionList = Annotated[list[FunctionDefinition], Field(min_length=1)]
+    NonEmptyTestList = Annotated[list[TestDefinition], Field(min_length=1)]
+    functions_list_adapter: TypeAdapter[NonEmptyFunctionList] = TypeAdapter(NonEmptyFunctionList)
+    tests_list_adapter: TypeAdapter[NonEmptyTestList] = TypeAdapter(NonEmptyTestList)
     fun_defs = None
     tests = None
 
