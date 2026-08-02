@@ -8,6 +8,7 @@ from src.matcher.AutomatonDef import AState, AUTOMATON
 from src.models.FunctionDefinition import FunctionDefinition
 from src.models.TypeDef import TypeDef
 from src.utils.Trie import TrieNode
+from src.utils.Profiler import profiler
 from src.config import get_logger
 
 
@@ -228,6 +229,7 @@ class AutomatonController:
             return self.selected_function.parameters[self.selected_param_key].type
         return None
 
+    @profiler.decorate("AutomatonController.evaluate_tokens")
     def evaluate_tokens(self, tokenid_to_bytes: dict[int, bytes], trie_root: TrieNode,
                         value_buckets: dict[TypeDef, set[int]]) -> list[int]:
         """Prefilter and evaluate token against current state
@@ -250,27 +252,29 @@ class AutomatonController:
             return []
 
         try:
-            candidates_ids = top.prefilter_candidates(
-                self.current_buffer_b,
-                token_id_to_bytes=tokenid_to_bytes,
-                trie_root=trie_root,
-                value_buckets=value_buckets
-            )
-            has_remaining_keys: bool = len(self._remaining_keys()) > 0
-            if isinstance(top, ValueMatcher):
-                log.debug(f"len of prefiltered for value matcher is {len(candidates_ids)}")
-                for t_id, t_b in tokenid_to_bytes.items():
-                    stripped_b = t_b.strip()
-                    if has_remaining_keys and stripped_b.startswith(b','):
-                        candidates_ids.add(t_id)
-                    elif stripped_b.startswith(b'}'):
-                        candidates_ids.add(t_id)
+            with profiler.track("evaluate_tokens#prefilter_candidates"):
+                candidates_ids = top.prefilter_candidates(
+                    self.current_buffer_b,
+                    token_id_to_bytes=tokenid_to_bytes,
+                    trie_root=trie_root,
+                    value_buckets=value_buckets
+                )
+                has_remaining_keys: bool = len(self._remaining_keys()) > 0
+                if isinstance(top, ValueMatcher):
+                    log.debug(f"len of prefiltered for value matcher is {len(candidates_ids)}")
+                    for t_id, t_b in tokenid_to_bytes.items():
+                        stripped_b = t_b.strip()
+                        if has_remaining_keys and stripped_b.startswith(b','):
+                            candidates_ids.add(t_id)
+                        elif stripped_b.startswith(b'}'):
+                            candidates_ids.add(t_id)
 
             valid_t_ids = []
-            for t_id in candidates_ids:
-                t_b = tokenid_to_bytes[t_id]
-                if self.evaluate_token_bytes(t_b):
-                    valid_t_ids.append(t_id)
+            with profiler.track("evaluate_tokens#evaluate_token_bytes_loop"):
+                for t_id in candidates_ids:
+                    t_b = tokenid_to_bytes[t_id]
+                    if self.evaluate_token_bytes(t_b):
+                        valid_t_ids.append(t_id)
 
         except Exception as e:
             log.exception(e)
@@ -316,6 +320,7 @@ class AutomatonController:
 
         return False
 
+    @profiler.decorate("AutomatonController.consume_token_bytes")
     def consume_token_bytes(self, token_b: bytes) -> None:
         """Consumes a token's bytes, updates internal buffers, and advances state if complete.
 

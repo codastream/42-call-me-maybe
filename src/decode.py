@@ -14,6 +14,7 @@ from src.exceptions import DecodingBlockedException, DecodingTimeoutException, I
 from src.utils.DebugDashboard import DebugDashboard
 from src.utils.StepController import StepController
 from src.utils.CustomUTF8Decoder import CustomUTF8Decoder
+from src.utils.Profiler import profiler
 from src.config import get_logger, get_dashboard_handler
 from src.models.TypeDef import TypeDef
 from src.models.DecodingStepState import DecodingStepState
@@ -24,6 +25,7 @@ from src.models.DecodingMetrics import DecodingMetrics
 log = get_logger()
 
 
+@profiler.decorate()
 def _init_generated(available_fun: str, current_prompt: str) -> str:
     """Initializes the generated prompt for the model with available functions and user input.
 
@@ -54,6 +56,7 @@ def _init_generated(available_fun: str, current_prompt: str) -> str:
     return generated
 
 
+@profiler.decorate()
 def _output_generated_json(generated: str) -> dict[Any, Any]:
     """Extracts and validates the generated JSON from the output string.
 
@@ -174,6 +177,7 @@ def _format_token_bytes(token_b: bytes) -> str:
         return f"bytes: {token_b!r}"
 
 
+@profiler.decorate()
 def _update_metrics(state: DecodingStepState) -> DecodingStepState:
     """Updates the decoding metrics in the provided state.
 
@@ -213,6 +217,8 @@ def _update_metrics(state: DecodingStepState) -> DecodingStepState:
         })
     actual_rank = int(np.where(sorted_global_ids == state.next_token_id)[0][0]) + 1
     metrics.selected_ranks.append(actual_rank)
+    actual_logit = float(state.logits[state.next_token_id])
+    metrics.selected_logits.append(actual_logit)
 
     state.context = ctx
     state.metrics = metrics
@@ -220,6 +226,7 @@ def _update_metrics(state: DecodingStepState) -> DecodingStepState:
     return state
 
 
+@profiler.decorate()
 def _add_quote_if_starting_val(
     controller: AutomatonController,
     tokenbytes_to_id: dict[bytes, int],
@@ -255,6 +262,7 @@ def _add_quote_if_starting_val(
         return False
 
 
+@profiler.decorate()
 def _add_expected_sequence(
     model: Small_LLM_Model,
     controller: AutomatonController,
@@ -348,6 +356,7 @@ def execute_decoding(
         DecodingBlockedException: If no authorized tokens are available.
     """
 
+    profiler.reset()
     generated = _init_generated(ctx.available_fun, ctx.current_prompt)
     input_ids = ctx.model.encode(generated)[0].tolist()
     custom_utf8_decoder = CustomUTF8Decoder()
@@ -411,4 +420,7 @@ def execute_decoding(
         generated += readable_chunk
     extra = custom_utf8_decoder.flush()
     log.debug(f"extra decoder bytes: {extra}")
-    return _output_generated_json(generated)
+    result = _output_generated_json(generated)
+    if is_debug:
+        log.debug("Profiling report:\n" + profiler.report())
+    return result

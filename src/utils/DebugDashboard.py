@@ -57,7 +57,8 @@ class DebugDashboard:
             Layout(name="stat_loops", size=3),
             Layout(name="stat_rejected_count", size=3),
             Layout(name="stat_rejected_pct", size=3),
-            Layout(name="stat_avg_rank", size=3)
+            Layout(name="stat_avg_rank", size=3),
+            Layout(name="stat_avg_logit", size=3)
         )
 
         self.layout["bottom"].split_column(
@@ -155,7 +156,7 @@ class DebugDashboard:
 
     def _build_stats(self, loops: int, rejected_pct: float,
                      top1_rejected: int,
-                     avg_rank: float) -> None:
+                     avg_rank: float, avg_logit: float) -> None:
         """Display decoding stats
 
         Args:
@@ -163,30 +164,39 @@ class DebugDashboard:
             rejected_pct (float): % of rejected top-1 tokens
             top1_rejected (int): nb of rejected top-1 tokens
             avg_rank (float): average rank of selected token
+            avg_logit (float): average logit of selected token
         """
-
+        reject_style = "bold red" if top1_rejected > 0 else "bold green"
+        reject_pc_style = "bold red" if rejected_pct > 10 else "bold green"
+        rank_style = "bold green" if avg_rank <= 2 else ("bold yellow" if avg_rank <= 5 else "bold red")
+        logit_style = "bold green" if avg_logit > 20 else "bold red"
         p_loops = Panel(
             Align(Text(str(loops), style="bold yellow"), align="center", vertical="middle"),
             title="Iterations", border_style="white"
         )
 
         p_reject = Panel(
-            Align(Text(str(top1_rejected), style="red"), align="center", vertical="middle"),
+            Align(Text(str(top1_rejected), style=reject_style), align="center", vertical="middle"),
             title="nb top1 rejected", border_style="white"
         )
         p_reject_pct = Panel(
-            Align(Text(f"{rejected_pct * 100:.1f}%", style="red"), align="center", vertical="middle"),
+            Align(Text(f"{rejected_pct * 100:.1f}%", style=reject_pc_style), align="center", vertical="middle"),
             title="% top1 rejected", border_style="white"
         )
         p_rank = Panel(
-            Align(Text(f"{avg_rank:.2f}", style="bold yellow"), align="center", vertical="middle"),
+            Align(Text(f"{avg_rank:.2f}", style=rank_style), align="center", vertical="middle"),
             title="Avg selected rank", border_style="white"
+        )
+        p_logit = Panel(
+            Align(Text(f"{avg_logit:.2f}", style=logit_style), align="center", vertical="middle"),
+            title="Avg selected logit", border_style="white"
         )
 
         self.layout["stat_loops"].update(p_loops)
         self.layout["stat_rejected_count"].update(p_reject)
         self.layout["stat_rejected_pct"].update(p_reject_pct)
         self.layout["stat_avg_rank"].update(p_rank)
+        self.layout["stat_avg_logit"].update(p_logit)
 
     def _build_help(self, step_hint: str = "") -> None:
         """Display usage message
@@ -247,7 +257,8 @@ class DebugDashboard:
         self._build_automaton_graph(state.current_stage)
         self._build_matcher_status(state.active_pipeline)
         self._build_logit_table(state.top_tokens_data)
-        self._build_stats(metrics.loops, metrics.top1_rejected_pct, metrics.top1_rejected_count, metrics.avg_rank)
+        self._build_stats(metrics.loops, metrics.top1_rejected_pct, metrics.top1_rejected_count, metrics.avg_rank,
+                          metrics.avg_logit)
         self._build_generated(state.generated_text, state.readable_chunk)
         self._build_help(step_hint)
         self._build_logs(logs)

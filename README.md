@@ -134,7 +134,7 @@ __boolean mask__ (chosen option)
 | Criteria | Treshold | All vocabulary |
 | --- | ---- | ----------------- |
 | JSON validity | 100% | 100% |
-| execution speed | < 300 s | 280 |
+| execution speed | < 300 s | 250 |
 | accuracy | > 90% | 100% |
 
 Performance vary according to settings: for instance, interpreting `number` as `float` to comply with project evaluation has increased evaluation time for test by 20 sec, as it requires at least 2 more iterations per argument.
