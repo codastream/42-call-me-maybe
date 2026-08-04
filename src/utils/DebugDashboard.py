@@ -73,18 +73,34 @@ class DebugDashboard:
             current_stage (str): current stage
         """
 
-        graph = Text()
-        for stage in self.stages:
-            style = "bold black on yellow" if stage == current_stage\
-                else "bold black on green" if stage == current_stage == AState.FINISH._name_\
+# FUN_NAME_VAL ──˃ PARAMS_OBJ_KEY ─˃ PARAM_KEY ─˃ PARAM_VAL ˂─˃ CLOSE ───˃  FINISH
+#             ╰──˃ EMPTY_PARAMS_AND_CLOSE ─────────────────────────────╯
+
+        graph = Text("\n")
+        for stage in [AState.FUN_NAME_VAL,
+                      AState.PARAMS_OBJ_KEY,
+                      AState.PARAM_KEY,
+                      AState.PARAM_VAL,
+                      AState.CLOSE,
+                      AState.FINISH]:
+            style = "bold black on yellow" if stage.name == current_stage\
                 else "dim white"
-            graph.append(f" {stage} ", style=style)
-            if stage == AState.PARAM_KEY._name_:
-                connector = " <-> "
-            if stage != AState.PARAM_KEY._name_:
-                connector = " > "
-            if stage != AState.FINISH._name_:
+            graph.append(f" {stage.name} ", style=style)
+            if stage == AState.PARAM_KEY:
+                connector = " <─> "
+            else:
+                connector = " ─> "
+            if stage != AState.FINISH:
                 graph.append(connector, style="dim")
+
+        graph.append("\n            ╰───> ", style="dim")
+        if current_stage == AState.EMPTY_PARAMS_AND_CLOSE.name:
+            style = "bold black on yellow"
+        else:
+            style = "dim white"
+        graph.append(f" {AState.EMPTY_PARAMS_AND_CLOSE.name} ", style=style)
+        graph.append("───────────────────────────────────╯", style="dim")
+
         centered = Align(graph, align="center", vertical="middle")
         self.layout["automaton"].update(Panel(centered, title="Automaton Flow Graph", border_style="white"))
 

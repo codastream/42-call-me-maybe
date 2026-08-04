@@ -39,11 +39,10 @@ Small languages models (SLM) can achieve better performance under specific condi
 1. __GET__ _logits_ from model
 2. __FOR EACH__ token in _logits_ :
    1.   DECODE token id to raw bytes
-   2.   __IF__ token is invalid for current state (or potentially next state) SET its logit to _negative infinity_
-   3.   __UPDATE__ _best token_
-3. __RETURN__ _best token_ and CONSUME it
+   2.   __IF__ token is valid for current state (or potentially next state) add its id to authorized_token_ids
+3. determine best token by selecting first authorized token from logits and CONSUME it
 4. __UPDATE__ state
-5.  __UPDATE__ generated text and update prompt
+5. __UPDATE__ generated text and update prompt
 
 
 # Design decisions
